@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<!--
+=========================================================
+大井町エモ・クエスト (Oimachi Quest)
+バージョン: 1.4.0
+最終更新日時: 2026年4月18日 15:55 (JST)
+
+【フェーズ別実装・アイデア情報】
+■ フェーズ1.5（現在）: UI・UX強化版
+  - HTML/CSS/JSの1ファイルのみ。
+  - スワイプ連続移動対応、カメラ中央固定。
+  - マップ上に地名ラベルを表示。
+  - 選択肢のランダム表示、全画面スペシャルイベント。
+■ フェーズ2: 本格グラフィック強化
+  - Canvas利用への完全移行
+  - オリジナルドット絵への差し替え
+■ フェーズ3: QRコードセーブ
+  - ステータスと座標をQRコード化して復帰可能に
+■ フェーズ4: DB連携・ソーシャル化＆特殊イベント
+  - Firebase等の導入（クラウドセーブ）
+  - 非同期オンライン機能
+  - タイムリープ機能（※フェーズ1.5にて一部先取り実装済）
+  - 変身イベント機能
+  - イベントデータの外部化
+  - リアルGPS連動機能
+  - ショップ機能とお金システム
+
+【運用ルール】
+- 今後修正を行う都度、このヘッダーコメントの
+  「バージョン」「最終更新日時」を更新すること。
+- コメント末尾に、バージョンと更新履歴の詳細も
+  残すこと。
+- アイデアや履歴は、長くなってもよいので、
+  指示がない限りは勝手に履歴を書き換えない
+  （削除・要約しない）運用ルールを徹底すること。
+- コメントは見やすく、全角４５文字以内で
+  改行すること。
+
+【更新履歴】
+v1.4.0 (2026-04-18)
+  - 品川歴史館のメッセージを施設紹介に変更。
+  - 各イベントの選択肢の数を増やし、毎回ランダム
+    に2つ選ばれて表示される仕組みを導入。
+  - 確率で発生する全画面のスペシャルイベント機能
+    （タイムリープ等）を実装。
+  - 品川歴史館で貝塚を選択時、30%の確率で縄文
+    時代へワープするスペシャルイベントを追加。
+v1.3.8 (2026-04-18)
+  - 蛇窪神社のイベントに「お金を洗う」選択肢を追加。
+  - パラメータに「お金（お小遣い）」を追加。
+  - ステータス表示を6項目（3x2）にレイアウト変更。
+  - フェーズ4のアイデアに「ショップ機能」を追加。
+v1.3.7 (2026-04-18)
+  - 体力が0以下になっても減り続け、マイナス表示
+    （例：-10(-2)）されるように修正。
+  - 飲食店（再利用可能スポット）を連続で利用でき
+    ない「はしご制限」ルールを実装。
+v1.3.6 (2026-04-18)
+  - パラメータの変動値を次の操作まで維持。
+v1.3.5 (2026-04-18)
+  - 突発イベント（人にぶつかる）の実装。
+  - フェーズ4アイデアにGPS連動を追記。
+v1.3.4 (2026-04-18)
+  - ポイント説明、イラスト、変動アニメ実装。
+v1.3.3 (2026-04-18)
+  - パラメータ初期値を修正。ログスクロール改善。
+v1.3.2 (2026-04-18)
+  - ログエリア拡大。結果コメント表示機能。
+v1.3.1 (2026-04-18)
+  - マップ分断解消、連続移動対応。
+v1.3.0 (2026-04-18)
+  - 操作スワイプ化、カメラ追従、地名ラベル。
+v1.2.0 (2026-04-18)
+  - マップ拡張、実在スポット大量追加。
+v1.1.0 (2026-04-18)
+  - 名前例ユリ、3桁ポイント化、性別選択。
+v1.0.2 (2026-04-18)
+  - コメント運用ルール更新。
+v1.0.1 (2026-04-18)
+  - タイムリープ機能アイデア追加。
+v1.0.0 (2026-04-18)
+  - プロトタイプ初版作成。
+=========================================================
+-->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>大井町エモ・クエスト</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', 'Quicksand', sans-serif;
+            background-color: #fdf2f8; 
+            color: #4b5563;
+            touch-action: none; 
+            overscroll-behavior: none;
+        }
+        
+        #map-viewport {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            background-color: #e0f2fe;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #map-container {
+            position: absolute;
+            transition: transform 0.15s linear;
+        }
+
+        #map {
+            display: grid;
+            grid-template-columns: repeat(20, 24px); 
+            grid-template-rows: repeat(20, 24px);
+            gap: 1px;
+            background-color: #9ca3af; 
+            border: 4px solid #fbcfe8;
+            border-radius: 8px;
+            width: max-content;
+        }
+
+        .tile {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px; 
+            background-color: #f3f4f6;
+            position: relative; 
+        }
+
+        .tile-0 { background-color: #dcfce7; }
+        .tile-1 { background-color: #e2e8f0; }
+        .tile-2 { background-color: #bbf7d0; }
+        .tile-4 { background-color: #cbd5e1; }
+        .tile-5 { background-color: #bfdbfe; }
+
+        #player-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px; 
+            z-index: 20;
+            pointer-events: none; 
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); 
+        }
+
+        #log::-webkit-scrollbar {
+            display: block;
+            width: 6px;
+        }
+        #log::-webkit-scrollbar-track {
+            background: #f9fafb;
+        }
+        #log::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+
+        .delta-val {
+            position: absolute;
+            right: 0;
+            top: -12px;
+            font-size: 10px;
+            font-weight: bold;
+            opacity: 0;
+            transition: all 0.5s ease-out;
+            pointer-events: none;
+        }
+        .delta-show {
+            opacity: 1;
+            transform: translateY(-8px);
+        }
+        .delta-plus { color: #f43f5e; }
+        .delta-minus { color: #3b82f6; }
+
+        @keyframes hungry-shake {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            25% { transform: translate(-52%, -50%) rotate(-5deg); }
+            75% { transform: translate(-48%, -50%) rotate(5deg); }
+            100% { transform: translate(-50%, -50%) rotate(0deg); }
+        }
+        .hungry-player {
+            animation: hungry-shake 0.3s infinite;
+            filter: grayscale(0.8) contrast(1.2);
+        }
+
+        /* スペシャルイベント用アニメーション */
+        @keyframes warp-in {
+            0% { opacity: 0; transform: scale(1.5) rotate(10deg); filter: blur(10px); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+        }
+        .warp-animation {
+            animation: warp-in 1s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center">
+
+    <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
+        <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
+        <p class="text-sm text-gray-500 mb-6">〜 放課後のプチぼうけん 〜</p>
+        
+        <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
+            <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
+            <ul class="space-y-1 text-gray-600">
+                <li>💖 <b>ハッピー:</b> 楽しい！っていう気持ち。</li>
+                <li>🤝 <b>コミュ力:</b> だれかと話すと上がるよ。</li>
+                <li>🔋 <b>体力:</b> 歩くと減るよ。マイナスになると…😱</li>
+                <li>📸 <b>映え度:</b> おしゃれな場所や発見でアップ。</li>
+                <li>🏙️ <b>地元愛:</b> 品川の歴史を知ると深まるよ。</li>
+                <li>💰 <b>お小遣い:</b> お参りやお手伝いでもらえるかも？</li>
+            </ul>
+        </div>
+
+        <div class="mb-4 text-left">
+            <label class="block text-sm font-medium text-gray-700 mb-1">おなまえ</label>
+            <input type="text" id="player-name" maxlength="6" placeholder="例: ユリ" class="w-full px-4 py-2 border-2 border-pink-200 rounded-xl focus:outline-none focus:border-pink-400">
+        </div>
+
+        <div class="mb-6 text-left">
+            <label class="block text-sm font-medium text-gray-700 mb-1">アバター</label>
+            <div class="flex justify-around bg-pink-50 p-2 rounded-xl border border-pink-100">
+                <label class="cursor-pointer flex flex-col items-center">
+                    <input type="radio" name="avatar" value="👧" checked class="hidden peer">
+                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👧</span>
+                </label>
+                <label class="cursor-pointer flex flex-col items-center">
+                    <input type="radio" name="avatar" value="👦" class="hidden peer">
+                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👦</span>
+                </label>
+                <label class="cursor-pointer flex flex-col items-center">
+                    <input type="radio" name="avatar" value="👩‍🦰" class="hidden peer">
+                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👩‍🦰</span>
+                </label>
+                <label class="cursor-pointer flex flex-col items-center">
+                    <input type="radio" name="avatar" value="👱‍♂️" class="hidden peer">
+                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👱‍♂️</span>
+                </label>
+                <label class="cursor-pointer flex flex-col items-center">
+                    <input type="radio" name="avatar" value="🐈" class="hidden peer">
+                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">🐈</span>
+                </label>
+            </div>
+        </div>
+
+        <button onclick="startGame()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-xl shadow-md transition transform hover:scale-105 mb-4">
+            冒険に出発する！
+        </button>
+    </div>
+
+    <div id="game-screen" class="hidden w-full max-w-md h-full flex flex-col bg-white shadow-xl relative">
+        <div class="bg-pink-100 p-3 rounded-b-2xl shadow-sm z-10 flex justify-between items-center">
+            <div>
+                <span id="ui-name" class="font-bold text-lg text-pink-600"></span>
+                <span id="ui-class" class="text-xs bg-white px-2 py-1 rounded-full text-gray-600 ml-2 shadow-sm"></span>
+            </div>
+            <button onclick="showSaveMock()" class="text-xs bg-pink-500 text-white px-3 py-1 rounded-full shadow hover:bg-pink-600">セーブ</button>
+        </div>
+
+        <div class="flex-none p-2 grid grid-cols-3 gap-1 text-center text-[8px] font-bold text-gray-600">
+            <div class="bg-blue-50 rounded-lg p-1 relative overflow-hidden">
+                ハッピー<br><span id="stat-happy" class="text-blue-500 text-[10px]">0</span><span id="stat-diff-happy" class="text-[7px] text-pink-400"></span>
+                <span id="delta-happy" class="delta-val"></span>
+            </div>
+            <div class="bg-yellow-50 rounded-lg p-1 relative overflow-hidden">
+                コミュ力<br><span id="stat-comm" class="text-yellow-500 text-[10px]">0</span><span id="stat-diff-comm" class="text-[7px] text-orange-400"></span>
+                <span id="delta-comm" class="delta-val"></span>
+            </div>
+            <div class="bg-green-50 rounded-lg p-1 relative overflow-hidden">
+                体力<br><span id="stat-stamina" class="text-green-500 text-[10px]">50</span><span id="stat-diff-stamina" class="text-[7px] text-blue-400"></span>
+                <span id="delta-stamina" class="delta-val"></span>
+            </div>
+            <div class="bg-purple-50 rounded-lg p-1 relative overflow-hidden">
+                映え度<br><span id="stat-curiosity" class="text-purple-500 text-[10px]">0</span><span id="stat-diff-curiosity" class="text-[7px] text-purple-400"></span>
+                <span id="delta-curiosity" class="delta-val"></span>
+            </div>
+            <div class="bg-orange-50 rounded-lg p-1 relative overflow-hidden">
+                地元愛<br><span id="stat-local" class="text-orange-500 text-[10px]">0</span><span id="stat-diff-local" class="text-[7px] text-orange-400"></span>
+                <span id="delta-local" class="delta-val"></span>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-1 relative overflow-hidden">
+                お小遣い<br><span id="stat-money" class="text-amber-600 text-[10px]">500</span><span id="stat-diff-money" class="text-[7px] text-amber-500"></span>
+                <span id="delta-money" class="delta-val"></span>
+            </div>
+        </div>
+
+        <div id="map-viewport" class="flex-grow">
+            <div id="map-container">
+                <div id="map"></div>
+            </div>
+            <div id="player-center"></div>
+            <div class="absolute bottom-2 left-0 w-full text-center text-[10px] text-gray-400 font-bold pointer-events-none opacity-70">
+                画面をなぞり続けて連続移動！
+            </div>
+        </div>
+
+        <div id="log" class="h-60 bg-gray-50 border-t border-gray-200 p-2 text-sm text-gray-700 overflow-y-auto z-10 relative touch-pan-y">
+        </div>
+
+        <!-- 通常のイベントモーダル -->
+        <div id="event-modal" class="hidden absolute inset-0 bg-black bg-opacity-40 z-40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl transform transition-all text-center">
+                <div id="event-illustration" class="text-6xl mb-4 animate-bounce">✨</div>
+                <h2 id="event-title" class="text-lg font-bold text-pink-600 mb-2 border-b-2 border-pink-100 pb-1"></h2>
+                <p id="event-text" class="text-sm text-gray-600 mb-4 h-20 overflow-y-auto"></p>
+                <div id="event-choices" class="space-y-3">
+                </div>
+            </div>
+        </div>
+
+        <!-- ★全画面スペシャルイベント用のスクリーン -->
+        <div id="special-screen" class="hidden absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500 bg-gray-900 text-white">
+            <div class="warp-animation">
+                <div id="special-illustration" class="text-8xl mb-8 drop-shadow-lg"></div>
+                <h1 id="special-title" class="text-3xl font-extrabold mb-4 drop-shadow-md text-yellow-300"></h1>
+                <p id="special-text" class="text-base font-medium leading-relaxed mb-8 drop-shadow-md whitespace-pre-wrap"></p>
+                <button onclick="closeSpecialScreen()" class="bg-white text-gray-900 font-bold py-3 px-8 rounded-full shadow-xl hover:scale-105 transform transition">
+                    元の時代へ戻る
+                </button>
+            </div>
+        </div>
+        
+        <div id="save-modal" class="hidden absolute inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl text-center">
+                <h2 class="text-lg font-bold text-gray-700 mb-2">セーブ機能 (準備中)</h2>
+                <textarea id="save-data-display" class="w-full h-24 text-xs p-2 bg-gray-100 rounded mb-4" readonly></textarea>
+                <button onclick="closeSaveMock()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-xl">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mapData = [
+            [2,2,2,0,0,0,1,1,0,0,4,4,0,0,0,0,0,0,1,1],
+            [2,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,4,4,4],
+            [2,0,1,1,1,0,0,0,0,0,4,0,0,1,1,0,3,4,1,1],
+            [2,0,1,1,1,0,0,3,0,0,4,0,0,0,0,0,0,4,1,1],
+            [3,0,0,0,0,0,0,0,0,0,0,0,0,3,1,1,0,4,4,4],
+            [2,0,1,1,1,0,0,1,1,0,4,0,0,1,1,1,0,0,0,0],
+            [2,0,0,0,0,0,0,0,0,0,4,0,0,1,1,1,0,0,3,0],
+            [2,0,0,2,2,2,0,1,1,0,4,0,0,0,0,0,0,0,1,1],
+            [2,0,0,2,2,2,0,0,0,0,0,0,1,1,1,0,0,0,1,1],
+            [2,0,0,0,0,0,0,3,0,0,4,0,1,3,1,0,0,0,1,1],
+            [1,1,0,1,1,0,0,0,0,0,4,0,0,0,0,0,0,0,5,5],
+            [1,1,0,0,0,0,0,1,1,0,4,0,0,2,2,0,0,5,5,0],
+            [0,0,0,0,3,0,0,1,1,0,0,0,0,2,2,0,0,5,0,0],
+            [0,1,1,0,0,0,0,0,0,0,4,0,0,0,0,0,3,5,0,0],
+            [0,1,1,0,1,1,1,0,0,0,4,4,0,1,1,0,0,5,5,0],
+            [0,0,0,0,1,3,1,0,0,0,0,4,4,0,0,0,0,0,5,5],
+            [2,0,1,1,0,0,0,0,1,1,0,0,4,4,0,1,1,0,0,0],
+            [2,0,1,1,0,0,2,0,0,0,0,0,0,4,0,1,1,0,0,0],
+            [2,0,0,0,0,0,2,3,2,0,0,0,0,4,0,0,0,0,0,0],
+            [2,2,2,2,2,2,2,2,2,2,2,2,2,4,2,2,2,2,2,2]
+        ];
+
+        const tileGraphics = { 1: "🏢", 2: "🌳", 3: "✨", 4: "🛤️", 5: "💧" };
+        const specialGraphics = {
+            "0,4": "⛩️", "16,2": "🍣", "13,4": "🚉", "18,6": "🏫",
+            "7,18": "🏛️", "4,12": "💻", "13,9": "☕", "7,3": "📚",
+            "7,9": "🗣️", "5,15": "🏫"
+        };
+
+        // ★選択肢を増やしました
+        const events = {
+            "5,15": { 
+                id: "school", illustration: "🏫", title: "豊葉の杜学園", 
+                text: "放課後だ！今日は大井町の方まで探検してみよう！", 
+                choices: [ 
+                    { text: "友達と出発！", stats: { happy: 100, comm: 200, curiosity: 100 }, resultText: "「よーし、寄り道して帰ろ！」みんなでワイワイ出発した。" }, 
+                    { text: "一人で気ままに歩く", stats: { happy: 50, curiosity: 150, local: 50 }, resultText: "「今日は自分のペースで歩きたい気分。」イヤホンをつけて歩き出した。" },
+                    { text: "先生にさよならを言う", stats: { comm: 100, local: 100 }, resultText: "「さようならー！」元気に挨拶して学校を出た。" },
+                    { text: "校庭をちょっと眺める", stats: { happy: 50, stamina: 10 }, resultText: "「部活のみんな頑張ってるなぁ。私もがんばろ。」" }
+                ], played: false 
+            },
+            "13,4": { 
+                id: "oimachi_station", illustration: "🚉", title: "大井町駅", 
+                text: "人がたくさん！トラックスも建設中でどんどん変わっていくね。", 
+                choices: [ 
+                    { text: "ウィンドウショッピングする", stats: { happy: 200, stamina: -10, curiosity: 300, local: 100 }, resultText: "「可愛い雑貨発見！今度お小遣いで買おうかな〜。」" }, 
+                    { text: "駅前の雰囲気を楽しむ", stats: { happy: 100, comm: 100, local: 200 }, resultText: "「たくさんの人が行き交ってる。大井町ってやっぱり都会だね。」" },
+                    { text: "アトレで服を見る", stats: { happy: 150, curiosity: 200 }, resultText: "「この服エモい！試着だけしちゃおうかな。」" },
+                    { text: "阪急の食品売り場をのぞく", stats: { happy: 100, stamina: 20, curiosity: 100 }, resultText: "「美味しそうなお惣菜がいっぱい。お腹すいてきちゃった…。」" }
+                ], played: false 
+            },
+            "16,2": { 
+                id: "kura_sushi", illustration: "🍣", title: "くら寿司", 
+                text: "おなかすいたー！ビッくらポン回したい！", 
+                choices: [ 
+                    { text: "お寿司をいっぱい食べる！", stats: { happy: 400, stamina: 500, money: -200 }, resultText: "「おなかいっぱい！ビッくらポンも当たって最高！」" }, 
+                    { text: "デザートだけ食べる", stats: { happy: 200, stamina: 200, money: -50 }, resultText: "「ここのミルクレープ、隠れた名作なんだよね。幸せ〜。」" },
+                    { text: "うどんをすする", stats: { happy: 150, stamina: 300, money: -100 }, resultText: "「お寿司屋さんのうどんって、なんでこんなに美味しいんだろう。」" }
+                ], played: false, reusable: true 
+            },
+            "7,18": { 
+                id: "shinagawa_history", illustration: "🏛️", title: "品川歴史館", 
+                text: "品川区の歴史や文化が学べる博物館だよ。大森貝塚の展示や、美しい日本庭園もあるんだって！", 
+                choices: [ 
+                    { 
+                        text: "大森貝塚の展示を見る", stats: { happy: 50, curiosity: 300, local: 200 }, resultText: "「モース博士ってすごいなー。昔の人はこんな貝を食べてたんだ。」",
+                        // ★スペシャルイベント定義（30%で発生）
+                        special: {
+                            probability: 0.3,
+                            title: "🌀 タイムリープ発生！ 🌀",
+                            illustration: "🐚",
+                            text: "展示の貝殻を見つめていたら、急にまわりが光りだして…\n\n気がつくと、そこは縄文時代！？\n\n「えっ、ウソ！？でも目の前の焼き貝、めっちゃいい匂い…」\n\n当時の巨大な貝を食べて、体力が全回復した！",
+                            stats: { happy: 500, stamina: 999, curiosity: 800, local: 500 },
+                            bgClass: "bg-gradient-to-b from-green-900 to-amber-900"
+                        }
+                    }, 
+                    { text: "日本庭園でのんびり和む", stats: { happy: 200, stamina: 50, local: 100 }, resultText: "「お庭が綺麗〜。なんだか心が落ち着くね。エモい…。」" },
+                    { text: "昔の農具の使い心地を想像する", stats: { happy: 100, curiosity: 200, local: 150 }, resultText: "「昔の人はこれで畑仕事してたんだ。大変そうだなぁ。」" },
+                    { text: "品川宿のジオラマを見る", stats: { happy: 150, curiosity: 250, local: 250 }, resultText: "「昔の宿場町ってこんなに賑わってたんだ！タイムスリップしたみたい。」" }
+                ], played: false, reusable: true 
+            },
+            "0,4": { 
+                id: "hebi_kubo", illustration: "⛩️", title: "蛇窪神社", 
+                text: "白蛇さまで有名な神社。金運アップのパワースポットだよ！", 
+                choices: [ 
+                    { text: "しっかりお参りする", stats: { happy: 250, local: 350 }, resultText: "「テストの点数が上がりますように…！白蛇さま、お願い！」" }, 
+                    { text: "お金を洗って金運アップ！", stats: { happy: 200, local: 300, money: 100 }, resultText: "「銭回しの口でお金を洗ったよ。なんだかお金持ちになれそうな予感！」" },
+                    { text: "御朱印やお守りを見る", stats: { happy: 150, curiosity: 250, local: 200 }, resultText: "「白蛇のデザインのお守り、ちょっと可愛いかも。」" },
+                    { text: "おみくじを引く", stats: { happy: 100, money: -50, curiosity: 150 }, resultText: "「大吉出た！今年はいいことありそう♪」" }
+                ], played: false 
+            },
+            "4,12": { 
+                id: "programming", illustration: "💻", title: "HALLO (プログラミング)", 
+                text: "ここでゲームの作り方を習えそう。私もクリエイターになれるかも？", 
+                choices: [ 
+                    { text: "体験レッスンを受けてみる", stats: { happy: 150, comm: 100, stamina: -10, curiosity: 400, local: 100 }, resultText: "「プログラミングって意外と面白い！私にもゲーム作れるかも。」" }, 
+                    { text: "外からこっそり見学する", stats: { happy: 50, curiosity: 200, local: 50 }, resultText: "「みんな真剣にパソコン向かってる。すごいなぁ…。」" },
+                    { text: "タイピングに挑戦！", stats: { happy: 100, stamina: -5, curiosity: 250 }, resultText: "「カタカタカタ…！私、結構タイピング早いかも！？」" }
+                ], played: false 
+            },
+            "18,6": { 
+                id: "tachiai_es", illustration: "🏫", title: "立会小学校", 
+                text: "小学生たちが元気いっぱい遊んでる。エモい気持ちになった。", 
+                choices: [ 
+                    { text: "昔を思い出してほっこり", stats: { happy: 200, stamina: 20, curiosity: 50, local: 300 }, resultText: "「あんなに無邪気に遊んでた頃があったなぁ…（遠い目）」" }, 
+                    { text: "小学生に手を振り返す", stats: { happy: 150, comm: 200, local: 100 }, resultText: "「小学生たちが笑顔で手を振り返してくれた。なんか嬉しい！」" },
+                    { text: "校舎の時計を見る", stats: { happy: 50 }, resultText: "「あっ、もうこんな時間！そろそろ移動しなきゃ。」" }
+                ], played: false 
+            },
+            "7,9": { 
+                id: "english", illustration: "🗣️", title: "TokyoEKA英会話", 
+                text: "Hello! 外国人の先生が挨拶してくれたよ。", 
+                choices: [ 
+                    { text: "元気に Hello! と返す", stats: { happy: 100, comm: 300, curiosity: 150 }, resultText: "「\"Excellent!\"って言われた！私の英語、通じた！」" }, 
+                    { text: "恥ずかしくて会釈だけする", stats: { comm: 50, curiosity: 50 }, resultText: "「やっぱり外国人の先生を前にすると緊張しちゃうな…。」" },
+                    { text: "勇気を出して How are you? と聞く", stats: { happy: 200, comm: 400, curiosity: 200 }, resultText: "「先生が笑顔でたくさん答えてくれた！コミュ力上がったかも！」" }
+                ], played: false 
+            },
+            "13,9": { 
+                id: "cafe", illustration: "☕", title: "おしゃれカフェ", 
+                text: "良い香りのするカフェ。少し休憩していこう。", 
+                choices: [ 
+                    { text: "ケーキセットを頼む！", stats: { happy: 300, stamina: 300, money: -150 }, resultText: "「甘いものは正義！一週間の疲れが吹き飛んだ〜！」" }, 
+                    { text: "映えるドリンクを頼む", stats: { happy: 250, comm: 100, stamina: 150, curiosity: 200, money: -80 }, resultText: "「これ絶対インスタ映えするやつ！飲むのがもったいないくらい可愛い。」" },
+                    { text: "ブラックコーヒーに挑戦", stats: { happy: 100, stamina: 200, curiosity: 100, money: -50 }, resultText: "「に、にがい…。でもちょっと大人になった気分！」" }
+                ], played: false, reusable: true 
+            },
+            "7,3": { 
+                id: "toys_academy", illustration: "📚", title: "トイズアカデミー", 
+                text: "頭が良くなりそうなおもちゃや教材がたくさんある！", 
+                choices: [ 
+                    { text: "知育パズルに挑戦してみる", stats: { happy: 100, stamina: -10, curiosity: 350 }, resultText: "「うーん、難しい！でも解けた時のスッキリ感がたまらない。」" }, 
+                    { text: "面白そうな教材を眺める", stats: { happy: 50, curiosity: 200 }, resultText: "「小さい子向けのおもちゃって、見てるだけで癒やされるなぁ。」" },
+                    { text: "立体パズルを組んでみる", stats: { happy: 150, curiosity: 300 }, resultText: "「すごい！これどうやって組み合わさってるんだろう？」" }
+                ], played: false 
+            },
+            "16,13": { 
+                id: "tachiai_gawa", illustration: "🌊", title: "立会川周辺", 
+                text: "川沿いを歩くと風が気持ちいい。坂本龍馬のゆかりの地も近いね。", 
+                choices: [ 
+                    { text: "川を眺めてエモに浸る", stats: { happy: 150, stamina: 50, curiosity: 100, local: 250 }, resultText: "「川のせせらぎと夕焼け…エモすぎる。ずっと見ていられそう。」" }, 
+                    { text: "歴史に思いを馳せる", stats: { happy: 100, curiosity: 300, local: 300 }, resultText: "「ここに坂本龍馬もいたのかな。なんだか不思議な気分。」" },
+                    { text: "川沿いを軽くランニング", stats: { happy: 100, stamina: -20, local: 100 }, resultText: "「風をきって走るの気持ちいい！ちょっと体力使ったけど。」" }
+                ], played: false 
+            }
+        };
+
+        let gameState = {
+            player: { name: "ゲスト", avatar: "👧", x: 5, y: 15 },
+            stats: { happy: 0, comm: 0, stamina: 50, curiosity: 0, local: 0, money: 500 },
+            lastEventId: null,
+            stepCount: 0
+        };
+
+        const TILE_SIZE = 24; 
+        const STEP_SIZE = TILE_SIZE + 1;
+
+        function startGame() {
+            const nameInput = document.getElementById('player-name').value;
+            if (nameInput.trim() !== "") gameState.player.name = nameInput;
+            const avatarRadios = document.getElementsByName('avatar');
+            for (let radio of avatarRadios) if (radio.checked) gameState.player.avatar = radio.value;
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('ui-name').innerText = gameState.player.name;
+            document.getElementById('player-center').innerText = gameState.player.avatar;
+
+            initMap();
+            updateCameraPosition();
+            updateStatus();
+            document.getElementById('log').innerHTML = "";
+            logMessage(`豊葉の杜学園からスタートしたよ！`);
+        }
+
+        function initMap() {
+            const mapEl = document.getElementById('map');
+            mapEl.innerHTML = '';
+            for (let y = 0; y < mapData.length; y++) {
+                for (let x = 0; x < mapData[y].length; x++) {
+                    const tileVal = mapData[y][x];
+                    const tileDiv = document.createElement('div');
+                    tileDiv.className = `tile tile-${tileVal}`;
+                    let char = "";
+                    const coordKey = `${x},${y}`;
+                    if (specialGraphics[coordKey]) char = specialGraphics[coordKey];
+                    else if (tileGraphics[tileVal]) {
+                        if (tileVal === 3) {
+                            const ev = events[coordKey];
+                            char = (ev && ev.played && !ev.reusable) ? "" : tileGraphics[tileVal];
+                        } else char = tileGraphics[tileVal];
+                    }
+                    if(char) tileDiv.innerText = char;
+                    if (events[coordKey]) {
+                        const ev = events[coordKey];
+                        if (!(ev.played && !ev.reusable)) {
+                            const label = document.createElement('div');
+                            label.className = "absolute -top-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-95 px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap text-pink-600 shadow-sm border border-pink-200 z-10 pointer-events-none";
+                            label.innerText = ev.title.trim();
+                            tileDiv.appendChild(label);
+                        }
+                    }
+                    mapEl.appendChild(tileDiv);
+                }
+            }
+        }
+
+        function updateCameraPosition() {
+            const viewport = document.getElementById('map-viewport');
+            const px = (gameState.player.x * STEP_SIZE) + (TILE_SIZE / 2);
+            const py = (gameState.player.y * STEP_SIZE) + (TILE_SIZE / 2);
+            const mapX = (viewport.clientWidth / 2) - px;
+            const mapY = (viewport.clientHeight / 2) - py;
+            document.getElementById('map-container').style.transform = `translate(${mapX}px, ${mapY}px)`;
+        }
+
+        function showDelta(type, val) {
+            if (val === 0) return;
+            const el = document.getElementById(`delta-${type}`);
+            const diffEl = document.getElementById(`stat-diff-${type}`);
+            diffEl.innerText = (val > 0 ? `(+${val})` : `(${val})`);
+            el.innerText = (val > 0 ? `+${val}` : val);
+            el.className = `delta-val delta-show ${val > 0 ? 'delta-plus' : 'delta-minus'}`;
+            setTimeout(() => { el.classList.remove('delta-show'); }, 1000);
+        }
+
+        function clearAllDeltas() {
+            const keys = ["happy", "comm", "stamina", "curiosity", "local", "money"];
+            keys.forEach(key => { document.getElementById(`stat-diff-${key}`).innerText = ''; });
+        }
+
+        function updateStatus(deltas = {}) {
+            for (let key in gameState.stats) {
+                const statEl = document.getElementById(`stat-${key}`);
+                if (!statEl) continue;
+                statEl.innerText = gameState.stats[key];
+                if (key === 'stamina') {
+                    if (gameState.stats[key] <= 0) {
+                        statEl.classList.add('text-red-600');
+                        statEl.classList.remove('text-green-500');
+                        document.getElementById('player-center').classList.add('hungry-player');
+                    } else {
+                        statEl.classList.remove('text-red-600');
+                        statEl.classList.add('text-green-500');
+                        document.getElementById('player-center').classList.remove('hungry-player');
+                    }
+                }
+                if (deltas[key] !== undefined && deltas[key] !== 0) showDelta(key, deltas[key]);
+            }
+            const total = gameState.stats.happy + gameState.stats.comm + gameState.stats.curiosity + gameState.stats.local;
+            const avg = total / 4;
+            let className = "おうち大好きっ子";
+            if (avg >= 300) className = "大井町インフルエンサー👑";
+            else if (avg >= 150) className = "アクティブおでかけ女子✨";
+            else if (avg >= 50) className = "ご近所リサーチャー🔍";
+            document.getElementById('ui-class').innerText = className;
+        }
+
+        function logMessage(msg, isPlayer = false) {
+            const logEl = document.getElementById('log');
+            const p = document.createElement('div');
+            if (isPlayer) {
+                p.innerText = `${gameState.player.avatar} ${msg}`;
+                p.className = "mb-3 mt-1 text-pink-700 font-bold bg-pink-100 bg-opacity-50 p-2 rounded-lg border border-pink-200";
+            } else {
+                p.innerText = `> ${msg}`;
+                p.className = "mb-1 text-gray-600";
+            }
+            logEl.appendChild(p);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function movePlayer(dx, dy) {
+            if (!document.getElementById('event-modal').classList.contains('hidden') || !document.getElementById('special-screen').classList.contains('hidden')) return;
+            clearAllDeltas();
+
+            const newX = gameState.player.x + dx;
+            const newY = gameState.player.y + dy;
+            if (newX < 0 || newX >= mapData[0].length || newY < 0 || newY >= mapData.length) return;
+            const targetTile = mapData[newY][newX];
+            if ([1, 2, 4, 5].includes(targetTile)) return;
+
+            gameState.player.x = newX;
+            gameState.player.y = newY;
+            
+            let deltas = { stamina: -2 };
+            
+            if (Math.abs(newX - 13) <= 2 && Math.abs(newY - 4) <= 2) {
+                if (Math.random() < 0.05) {
+                    deltas.stamina = -10;
+                    logMessage("【ハプニング！】トラックス周辺が混んでて人にぶつかっちゃった…");
+                }
+            }
+
+            gameState.stats.stamina += deltas.stamina;
+
+            if (gameState.stats.stamina <= 0 && gameState.stats.stamina - deltas.stamina > 0) {
+                logMessage("😱 おなかがすいてフラフラ…体力がマイナスになっちゃった！");
+            }
+
+            updateCameraPosition();
+            updateStatus(deltas);
+            checkEvent(newX, newY);
+        }
+
+        function checkEvent(x, y) {
+            const key = `${x},${y}`;
+            const ev = events[key];
+            if (ev) {
+                if (ev.reusable && ev.id === gameState.lastEventId) {
+                    return;
+                }
+                if (!ev.played || ev.reusable) {
+                    showEventModal(ev, key);
+                }
+            }
+        }
+
+        // 配列からランダムに指定個数を選ぶユーティリティ関数
+        function getRandomChoices(arr, count) {
+            const shuffled = [...arr].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        function showEventModal(ev, key) {
+            isSwiping = false;
+            document.getElementById('event-illustration').innerText = ev.illustration || "✨";
+            document.getElementById('event-title').innerText = ev.title;
+            document.getElementById('event-text').innerText = ev.text;
+            const choicesContainer = document.getElementById('event-choices');
+            choicesContainer.innerHTML = '';
+
+            // ★選択肢の中からランダムに2つピックアップ（2つ以下の場合は全部）
+            const displayChoices = getRandomChoices(ev.choices, Math.min(2, ev.choices.length));
+
+            displayChoices.forEach((choice) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left bg-pink-50 hover:bg-pink-100 text-gray-700 py-3 px-4 rounded-xl text-sm border border-pink-200 transition font-bold shadow-sm";
+                btn.innerText = choice.text;
+                btn.onclick = () => handleChoice(ev, key, choice);
+                choicesContainer.appendChild(btn);
+            });
+            document.getElementById('event-modal').classList.remove('hidden');
+        }
+
+        function handleChoice(ev, key, choice) {
+            clearAllDeltas();
+            document.getElementById('event-modal').classList.add('hidden');
+
+            // ★スペシャルイベント発生判定
+            if (choice.special && Math.random() < choice.special.probability) {
+                triggerSpecialEvent(ev, choice.special);
+                return; // 通常の処理はスキップ
+            }
+
+            // 通常処理
+            let deltas = choice.stats || {};
+            for (let k in deltas) {
+                if (gameState.stats[k] !== undefined) {
+                    gameState.stats[k] += deltas[k];
+                }
+            }
+
+            ev.played = true;
+            if (ev.reusable) {
+                gameState.lastEventId = ev.id;
+            } else {
+                gameState.lastEventId = null;
+            }
+
+            initMap(); 
+            updateStatus(deltas);
+            logMessage(`【${ev.title}】 ${choice.text}`);
+            logMessage(choice.resultText, true);
+        }
+
+        // ★スペシャルイベント実行関数
+        function triggerSpecialEvent(ev, specialData) {
+            ev.played = true;
+            if (ev.reusable) gameState.lastEventId = ev.id;
+            else gameState.lastEventId = null;
+
+            // ログに出力
+            logMessage(`【スペシャルイベント発生！】 ${specialData.title}`);
+
+            // 画面要素の設定
+            const screen = document.getElementById('special-screen');
+            // 既存の背景クラスをリセットして、新しい背景クラスを設定
+            screen.className = `hidden absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500 text-white ${specialData.bgClass || 'bg-gray-900'}`;
+            
+            document.getElementById('special-illustration').innerText = specialData.illustration || "✨";
+            document.getElementById('special-title').innerText = specialData.title;
+            document.getElementById('special-text').innerText = specialData.text;
+
+            // ステータス反映用に保存（閉じる時に適用）
+            screen.dataset.stats = JSON.stringify(specialData.stats || {});
+
+            // 表示
+            screen.classList.remove('hidden');
+        }
+
+        // ★スペシャルイベント終了関数
+        function closeSpecialScreen() {
+            const screen = document.getElementById('special-screen');
+            screen.classList.add('hidden');
+
+            // ステータス反映
+            let deltas = JSON.parse(screen.dataset.stats || "{}");
+            for (let k in deltas) {
+                if (gameState.stats[k] !== undefined) {
+                    gameState.stats[k] += deltas[k];
+                }
+            }
+            
+            initMap();
+            updateStatus(deltas);
+            logMessage("「…ふぅ、すごい体験だった。元の世界に戻ってこれてよかった。」", true);
+        }
+
+        let touchStartX = 0, touchStartY = 0, isSwiping = false;
+        const SWIPE_THRESHOLD = 35; 
+        const viewport = document.getElementById('map-viewport');
+
+        viewport.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; isSwiping = true; }, {passive: false});
+        viewport.addEventListener('touchmove', e => {
+            if (!isSwiping || !document.getElementById('event-modal').classList.contains('hidden') || !document.getElementById('special-screen').classList.contains('hidden')) return;
+            e.preventDefault();
+            let dx = e.touches[0].clientX - touchStartX, dy = e.touches[0].clientY - touchStartY;
+            if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+                if (Math.abs(dx) > Math.abs(dy)) movePlayer(dx > 0 ? 1 : -1, 0);
+                else movePlayer(0, dy > 0 ? 1 : -1);
+                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            }
+        }, {passive: false});
+        viewport.addEventListener('touchend', () => isSwiping = false);
+
+        viewport.addEventListener('mousedown', e => { isSwiping = true; touchStartX = e.clientX; touchStartY = e.clientY; });
+        viewport.addEventListener('mousemove', e => {
+            if (!isSwiping || !document.getElementById('event-modal').classList.contains('hidden') || !document.getElementById('special-screen').classList.contains('hidden')) return;
+            let dx = e.clientX - touchStartX, dy = e.clientY - touchStartY;
+            if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+                if (Math.abs(dx) > Math.abs(dy)) movePlayer(dx > 0 ? 1 : -1, 0);
+                else movePlayer(0, dy > 0 ? 1 : -1);
+                touchStartX = e.clientX; touchStartY = e.clientY;
+            }
+        });
+        window.addEventListener('mouseup', () => isSwiping = false);
+
+        window.addEventListener('keydown', (e) => {
+            if(document.getElementById('start-screen').classList.contains('hidden')) {
+                if(e.key === 'ArrowUp') movePlayer(0, -1);
+                if(e.key === 'ArrowDown') movePlayer(0, 1);
+                if(e.key === 'ArrowLeft') movePlayer(-1, 0);
+                if(e.key === 'ArrowRight') movePlayer(1, 0);
+            }
+        });
+
+        window.addEventListener('resize', () => { if(document.getElementById('game-screen').classList.contains('hidden') === false) updateCameraPosition(); });
+
+        function showSaveMock() {
+            document.getElementById('save-data-display').value = JSON.stringify(gameState);
+            document.getElementById('save-modal').classList.remove('hidden');
+        }
+        function closeSaveMock() { document.getElementById('save-modal').classList.add('hidden'); }
+    </script>
+</body>
+</html>
