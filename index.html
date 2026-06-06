@@ -4,8 +4,8 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.5.0
-最終更新日時: 2026年6月6日 (JST)
+バージョン: 1.6.0
+最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
 ■ フェーズ1.5（現在）: UI・UX強化版
@@ -39,6 +39,11 @@
   改行すること。
 
 【更新履歴】
+v1.6.0 (2026-06-07)
+  - オープニング画面にバニコリタン2実装。
+    セグメント式アクティブ・ラグドール（頭・胴・腕・脚）。
+    放置5秒→端からひょっこり、15秒→全画面駆け抜け。
+    スーパーバニーマン風の多周波サイン合成で身もだえ挙動。
 v1.5.0 (2026-06-06)
   - イースターエッグ「バニコリタン」実装。
     放置タイマーで出現するシュールなキャラクター。
@@ -210,6 +215,15 @@ v1.0.0 (2026-04-18)
             animation: warp-in 1s ease-out forwards;
         }
 
+        #banicori2-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 25;
+        }
+
         #banicori-canvas {
             position: absolute;
             inset: 0;
@@ -222,10 +236,12 @@ v1.0.0 (2026-04-18)
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center">
 
+    <canvas id="banicori2-canvas"></canvas>
+
     <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
         <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
         <p class="text-sm text-gray-500 mb-1">〜 放課後のプチぼうけん 〜</p>
-        <p class="text-[10px] text-gray-300 mb-6">v1.5.0</p>
+        <p class="text-[10px] text-gray-300 mb-6">v1.6.0</p>
         
         <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
             <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
@@ -819,6 +835,292 @@ v1.0.0 (2026-04-18)
         });
 
         window.addEventListener('resize', () => { if(document.getElementById('game-screen').classList.contains('hidden') === false) updateCameraPosition(); });
+
+        // ========================================================
+        // バニコリタン2（オープニング画面イースターエッグ）
+        // セグメント式アクティブ・ラグドール。
+        // キャラクター画像差し替えは _drawBodyAt() を置き換えること。
+        // ========================================================
+        class Banikolitan2 {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx    = canvas.getContext('2d');
+                this.S      = 18; // 関節の基本単位(px)
+
+                this.PEEK_DELAY    = 5000;
+                this.DASH_DELAY    = 15000;
+                this.PEEK_COOLDOWN = 20000;
+                this.PEEK_IN_MS    = 800;
+                this.PEEK_HOLD_MS  = 2000;
+                this.PEEK_OUT_MS   = 600;
+
+                this.state        = 'normal';
+                this.animTime     = 0;
+                this.lastActivity = Date.now();
+                this.lastPeekTime = -99999;
+
+                this.peekProgress = 0;
+                this.peekPhase    = 'in';
+                this.peekTimer    = 0;
+                this.peekSide     = 1;
+
+                this.dashX     = 0;
+                this.dashY     = 0;
+                this.dashSpeed = 0;
+                this.dashTime  = 0;
+
+                ['click', 'touchstart', 'keydown', 'mousedown'].forEach(ev =>
+                    window.addEventListener(ev, () => this._onActivity(), { passive: true })
+                );
+
+                let last = performance.now();
+                const tick = (now) => {
+                    const dt = Math.min(now - last, 100);
+                    last = now;
+                    const ow = this.canvas.offsetWidth;
+                    const oh = this.canvas.offsetHeight;
+                    if (this.canvas.width !== ow || this.canvas.height !== oh) {
+                        this.canvas.width = ow; this.canvas.height = oh;
+                    }
+                    this._update(dt);
+                    this._draw();
+                    requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            }
+
+            _onActivity() {
+                this.lastActivity = Date.now();
+                if (this.state === 'peek') { this.peekPhase = 'out'; this.peekTimer = 0; }
+            }
+
+            _update(dt) {
+                this.animTime += dt;
+                // ゲーム開始後は停止
+                if (!document.getElementById('start-screen') ||
+                    document.getElementById('start-screen').classList.contains('hidden')) return;
+
+                const inactive = Date.now() - this.lastActivity;
+                if (this.state === 'dash') { this._updateDash(dt); return; }
+                if (inactive >= this.DASH_DELAY) { this._startDash(); return; }
+                if (this.state === 'peek') { this._updatePeek(dt); return; }
+                if (inactive >= this.PEEK_DELAY &&
+                    Date.now() - this.lastPeekTime > this.PEEK_COOLDOWN) this._startPeek();
+            }
+
+            _startPeek() {
+                this.state = 'peek'; this.peekPhase = 'in';
+                this.peekProgress = 0; this.peekTimer = 0;
+                this.peekSide = Math.random() > 0.5 ? 1 : -1;
+            }
+
+            _updatePeek(dt) {
+                this.peekTimer += dt;
+                if (this.peekPhase === 'in') {
+                    this.peekProgress = Math.min(1, this.peekTimer / this.PEEK_IN_MS);
+                    if (this.peekProgress >= 1) { this.peekPhase = 'hold'; this.peekTimer = 0; }
+                } else if (this.peekPhase === 'hold') {
+                    if (this.peekTimer >= this.PEEK_HOLD_MS) { this.peekPhase = 'out'; this.peekTimer = 0; }
+                } else {
+                    this.peekProgress = Math.max(0, 1 - this.peekTimer / this.PEEK_OUT_MS);
+                    if (this.peekProgress <= 0) { this.state = 'normal'; this.lastPeekTime = Date.now(); }
+                }
+            }
+
+            _startDash() {
+                this.state = 'dash';
+                const w = this.canvas.width || 400;
+                const h = this.canvas.height || 700;
+                this.dashX     = -(this.S * 6);
+                this.dashY     = h * 0.25 + Math.random() * h * 0.45;
+                this.dashSpeed = (w + this.S * 12) / 2400;
+                this.dashTime  = 0;
+            }
+
+            _updateDash(dt) {
+                this.dashTime += dt;
+                this.dashX += this.dashSpeed * dt;
+                if (this.dashX > this.canvas.width + this.S * 6) {
+                    this.state = 'normal'; this.lastActivity = Date.now();
+                }
+            }
+
+            // セグメント座標をフォワードキネマティクスで計算
+            _computeBody(rootX, rootY, t) {
+                const S = this.S;
+
+                // 骨盤（ルート）
+                const hip = { x: rootX, y: rootY };
+
+                // 脊椎（2セグメント）
+                const s1a = -Math.PI / 2 + Math.sin(t * 0.013) * 0.35 + Math.sin(t * 0.021 + 1.0) * 0.2;
+                const s2a = s1a + Math.sin(t * 0.017 + 0.7) * 0.3 + Math.sin(t * 0.029 + 2.1) * 0.15;
+                const torsoMid = { x: hip.x + Math.cos(s1a) * S * 1.1, y: hip.y + Math.sin(s1a) * S * 1.1 };
+                const shoulder = { x: torsoMid.x + Math.cos(s2a) * S * 0.9, y: torsoMid.y + Math.sin(s2a) * S * 0.9 };
+                const headPos  = { x: shoulder.x + Math.cos(s2a) * S * 0.55, y: shoulder.y + Math.sin(s2a) * S * 0.55 };
+
+                // 左腕
+                const la1a = s2a + Math.PI * 0.45 + Math.sin(t * 0.025) * 0.9 + Math.sin(t * 0.041 + 1.2) * 0.5;
+                const la2a = la1a + Math.sin(t * 0.033 + 0.5) * 1.2 + 0.9;
+                const lElbow = { x: shoulder.x + Math.cos(la1a) * S * 1.1, y: shoulder.y + Math.sin(la1a) * S * 1.1 };
+                const lHand  = { x: lElbow.x  + Math.cos(la2a) * S * 1.0, y: lElbow.y  + Math.sin(la2a) * S * 1.0 };
+
+                // 右腕
+                const ra1a = s2a - Math.PI * 0.45 + Math.sin(t * 0.025 + Math.PI) * 0.9 + Math.sin(t * 0.041 + 2.7) * 0.5;
+                const ra2a = ra1a + Math.sin(t * 0.033 + 1.5) * 1.2 - 0.9;
+                const rElbow = { x: shoulder.x + Math.cos(ra1a) * S * 1.1, y: shoulder.y + Math.sin(ra1a) * S * 1.1 };
+                const rHand  = { x: rElbow.x  + Math.cos(ra2a) * S * 1.0, y: rElbow.y  + Math.sin(ra2a) * S * 1.0 };
+
+                // 左脚
+                const ll1a = Math.PI * 0.5 - 0.22 + Math.sin(t * 0.019) * 0.55 + Math.sin(t * 0.031 + 0.8) * 0.35;
+                const ll2a = ll1a + Math.sin(t * 0.027 + 0.3) * 0.75 + 0.45;
+                const lKnee = { x: hip.x + Math.cos(ll1a) * S * 1.2, y: hip.y + Math.sin(ll1a) * S * 1.2 };
+                const lFoot = { x: lKnee.x + Math.cos(ll2a) * S * 1.1, y: lKnee.y + Math.sin(ll2a) * S * 1.1 };
+
+                // 右脚
+                const rl1a = Math.PI * 0.5 + 0.22 + Math.sin(t * 0.019 + Math.PI) * 0.55 + Math.sin(t * 0.031 + Math.PI + 0.8) * 0.35;
+                const rl2a = rl1a + Math.sin(t * 0.027 + Math.PI + 0.3) * 0.75 + 0.45;
+                const rKnee = { x: hip.x + Math.cos(rl1a) * S * 1.2, y: hip.y + Math.sin(rl1a) * S * 1.2 };
+                const rFoot = { x: rKnee.x + Math.cos(rl2a) * S * 1.1, y: rKnee.y + Math.sin(rl2a) * S * 1.1 };
+
+                return { hip, torsoMid, shoulder, headPos, lElbow, lHand, rElbow, rHand, lKnee, lFoot, rKnee, rFoot };
+            }
+
+            // キャラクター描画（差し替え口: rootX, rootY, t を引数に取る）
+            _drawBodyAt(ctx, rootX, rootY, t) {
+                const S = this.S;
+                const b = this._computeBody(rootX, rootY, t);
+
+                const limb = (p1, p2, w, col) => {
+                    ctx.save();
+                    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
+                    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+                    ctx.restore();
+                };
+
+                // 後ろ脚
+                limb(b.hip, b.lKnee, S * 0.55, '#e87ab0');
+                limb(b.lKnee, b.lFoot, S * 0.5, '#e87ab0');
+                limb(b.hip, b.rKnee, S * 0.55, '#ff91c8');
+                limb(b.rKnee, b.rFoot, S * 0.5, '#ff91c8');
+
+                // 脊椎
+                limb(b.hip, b.torsoMid, S * 0.9, '#ff91c8');
+                limb(b.torsoMid, b.shoulder, S * 0.85, '#ff91c8');
+
+                // 胴体ブロブ
+                ctx.fillStyle = '#ff91c8';
+                ctx.beginPath();
+                ctx.ellipse(b.torsoMid.x, b.torsoMid.y, S * 0.82, S * 0.67, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.18)';
+                ctx.beginPath();
+                ctx.ellipse(b.torsoMid.x - S * 0.15, b.torsoMid.y - S * 0.15, S * 0.3, S * 0.22, -0.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 腕
+                limb(b.shoulder, b.lElbow, S * 0.45, '#e87ab0');
+                limb(b.lElbow, b.lHand, S * 0.4, '#e87ab0');
+                limb(b.shoulder, b.rElbow, S * 0.45, '#ff91c8');
+                limb(b.rElbow, b.rHand, S * 0.4, '#ff91c8');
+
+                // 頭
+                ctx.fillStyle = '#ff91c8';
+                ctx.beginPath();
+                ctx.arc(b.headPos.x, b.headPos.y, S * 0.75, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 耳（ふわふわ）
+                for (const side of [-1, 1]) {
+                    const ea = -Math.PI / 2 + side * 0.45 + Math.sin(t * 0.004 + side) * 0.2;
+                    ctx.save();
+                    ctx.translate(b.headPos.x + Math.cos(ea) * S * 0.55, b.headPos.y + Math.sin(ea) * S * 0.55);
+                    ctx.rotate(ea + Math.PI / 2);
+                    ctx.fillStyle = '#ff91c8';
+                    ctx.beginPath(); ctx.ellipse(0, -S * 0.32, S * 0.18, S * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#ffd6ec';
+                    ctx.beginPath(); ctx.ellipse(0, -S * 0.32, S * 0.08, S * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                }
+
+                // 目（まぬけ）
+                for (const side of [-1, 1]) {
+                    const ex = b.headPos.x + side * S * 0.3;
+                    const ey = b.headPos.y - S * 0.05;
+                    const pw = Math.sin(t * 0.002 + side * 0.6) * S * 0.07;
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath(); ctx.ellipse(ex, ey, S * 0.22, S * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath(); ctx.arc(ex + pw + side * S * 0.04, ey + S * 0.04, S * 0.11, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath(); ctx.arc(ex + pw - S * 0.06, ey - S * 0.05, S * 0.046, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 口
+                ctx.save();
+                ctx.strokeStyle = '#cc5590'; ctx.lineWidth = S * 0.07; ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(b.headPos.x - S * 0.2, b.headPos.y + S * 0.2);
+                ctx.quadraticCurveTo(b.headPos.x, b.headPos.y + S * 0.37, b.headPos.x + S * 0.2, b.headPos.y + S * 0.2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            _draw() {
+                const ctx = this.ctx;
+                const w   = this.canvas.width;
+                const h   = this.canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                if (this.state === 'normal') return;
+                if (this.state === 'peek') this._drawPeek(ctx, w, h);
+                else                       this._drawDash(ctx, w, h);
+            }
+
+            _drawPeek(ctx, w, h) {
+                const t  = this.animTime;
+                const p  = this.peekProgress;
+                const S  = this.S;
+                const sd = this.peekSide;
+
+                // 端からルートが顔を出す量
+                const reveal = S * 5 * p;
+                const rootX  = sd === 1 ? w - reveal + S * 2.5 : reveal - S * 2.5;
+                const rootY  = h * 0.44 + Math.sin(t * 0.011) * S * 0.6;
+
+                ctx.save();
+                ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+                this._drawBodyAt(ctx, rootX, rootY, t);
+                ctx.restore();
+            }
+
+            _drawDash(ctx, w, h) {
+                const t  = this.animTime;
+                const dt = this.dashTime;
+
+                // 駆け抜け中の激しいY上下（スーパーバニーマン風）
+                const wy = (time) =>
+                    Math.sin(time * 0.018) * 30 + Math.sin(time * 0.031 + 1.4) * 20
+                  + Math.sin(time * 0.051 + 2.8) * 10;
+
+                // 残像トレイル
+                for (let i = 3; i >= 1; i--) {
+                    const lag = i * 110;
+                    const lx  = this.dashX - this.dashSpeed * lag;
+                    ctx.save();
+                    ctx.globalAlpha = 0.15 / i;
+                    this._drawBodyAt(ctx, lx, this.dashY + wy(dt - lag), t - lag);
+                    ctx.restore();
+                }
+
+                this._drawBodyAt(ctx, this.dashX, this.dashY + wy(dt), t);
+            }
+        }
+
+        // バニコリタン2 はページロード時に起動（スタート画面専用）
+        window.addEventListener('DOMContentLoaded', () => {
+            const c2 = document.getElementById('banicori2-canvas');
+            if (c2) window.__banicoritan2 = new Banikolitan2(c2);
+        });
 
         // ========================================================
         // バニコリタン（イースターエッグ）
