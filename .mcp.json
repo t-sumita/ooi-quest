@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vibeline": {
+      "command": "cmd",
+      "args": ["/c", "cd /d C:\\dev\\vibeline\\server && npm start"]
+    }
+  }
+}

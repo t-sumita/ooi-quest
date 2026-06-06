@@ -4,8 +4,8 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.4.0
-最終更新日時: 2026年4月18日 15:55 (JST)
+バージョン: 1.5.0
+最終更新日時: 2026年6月6日 (JST)
 
 【フェーズ別実装・アイデア情報】
 ■ フェーズ1.5（現在）: UI・UX強化版
@@ -39,6 +39,11 @@
   改行すること。
 
 【更新履歴】
+v1.5.0 (2026-06-06)
+  - イースターエッグ「バニコリタン」実装。
+    放置タイマーで出現するシュールなキャラクター。
+    5秒放置→ひょっこり覗き、15秒放置→駆け抜け。
+    Canvas overlayで既存UIに影響なく描画。
 v1.4.0 (2026-04-18)
   - 品川歴史館のメッセージを施設紹介に変更。
   - 各イベントの選択肢の数を増やし、毎回ランダム
@@ -204,6 +209,15 @@ v1.0.0 (2026-04-18)
         .warp-animation {
             animation: warp-in 1s ease-out forwards;
         }
+
+        #banicori-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 30;
+        }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center">
@@ -339,6 +353,8 @@ v1.0.0 (2026-04-18)
                 <button onclick="closeSaveMock()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-xl">閉じる</button>
             </div>
         </div>
+
+        <canvas id="banicori-canvas"></canvas>
     </div>
 
     <script>
@@ -516,6 +532,7 @@ v1.0.0 (2026-04-18)
             updateStatus();
             document.getElementById('log').innerHTML = "";
             logMessage(`豊葉の杜学園からスタートしたよ！`);
+            initBanicoritan();
         }
 
         function initMap() {
@@ -801,6 +818,310 @@ v1.0.0 (2026-04-18)
         });
 
         window.addEventListener('resize', () => { if(document.getElementById('game-screen').classList.contains('hidden') === false) updateCameraPosition(); });
+
+        // ========================================================
+        // バニコリタン（イースターエッグ）
+        // 放置タイマーで出現するシュールなキャラクター。
+        // キャラクター画像への差し替えは _drawChar() を置き換えること。
+        // ========================================================
+        class Banicoritan {
+            constructor(canvas) {
+                this.canvas  = canvas;
+                this.ctx     = canvas.getContext('2d');
+                this.SIZE    = 56;
+
+                // タイミング設定（ms）
+                this.PEEK_DELAY    = 5000;
+                this.DASH_DELAY    = 15000;
+                this.PEEK_COOLDOWN = 25000;
+                this.PEEK_IN_MS    = 700;
+                this.PEEK_HOLD_MS  = 1500;
+                this.PEEK_OUT_MS   = 500;
+
+                this.state        = 'idle';
+                this.animTime     = 0;
+                this.lastActivity = Date.now();
+                this.lastPeekTime = -99999;
+
+                // ひょっこり用
+                this.peekProgress = 0;
+                this.peekPhase    = 'in';
+                this.peekTimer    = 0;
+
+                // 駆け抜け用
+                this.dashX     = 0;
+                this.dashY     = 0;
+                this.dashDir   = 1;
+                this.dashTime  = 0;
+                this.dashSpeed = 0;
+
+                // 入力検知（駆け抜け中は状態変化しない）
+                ['click', 'touchstart', 'keydown', 'mousedown'].forEach(ev =>
+                    window.addEventListener(ev, () => this._onActivity(), { passive: true })
+                );
+
+                let last = performance.now();
+                const tick = (now) => {
+                    const dt = Math.min(now - last, 100);
+                    last = now;
+                    const ow = this.canvas.offsetWidth;
+                    const oh = this.canvas.offsetHeight;
+                    if (this.canvas.width !== ow || this.canvas.height !== oh) {
+                        this.canvas.width = ow;
+                        this.canvas.height = oh;
+                    }
+                    this._update(dt);
+                    this._draw();
+                    requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            }
+
+            _onActivity() {
+                this.lastActivity = Date.now();
+                if (this.state === 'peeking') {
+                    // 操作されたら即座に引っ込む
+                    this.peekPhase = 'out';
+                    this.peekTimer = 0;
+                }
+                // 駆け抜け中は中断しない
+            }
+
+            _update(dt) {
+                this.animTime += dt;
+                const inactive = Date.now() - this.lastActivity;
+
+                if (this.state === 'dashing') {
+                    this._updateDash(dt);
+                    return;
+                }
+
+                // 15秒放置 → 駆け抜け（ひょっこり中でも上書き）
+                if (inactive >= this.DASH_DELAY) {
+                    this._startDash();
+                    return;
+                }
+
+                if (this.state === 'peeking') {
+                    this._updatePeek(dt);
+                    return;
+                }
+
+                // 5秒放置 + クールダウン明け → ひょっこり
+                if (inactive >= this.PEEK_DELAY &&
+                    Date.now() - this.lastPeekTime > this.PEEK_COOLDOWN) {
+                    this._startPeek();
+                }
+            }
+
+            _startPeek() {
+                this.state        = 'peeking';
+                this.peekPhase    = 'in';
+                this.peekProgress = 0;
+                this.peekTimer    = 0;
+            }
+
+            _updatePeek(dt) {
+                this.peekTimer += dt;
+                if (this.peekPhase === 'in') {
+                    this.peekProgress = Math.min(1, this.peekTimer / this.PEEK_IN_MS);
+                    if (this.peekProgress >= 1) { this.peekPhase = 'hold'; this.peekTimer = 0; }
+                } else if (this.peekPhase === 'hold') {
+                    if (this.peekTimer >= this.PEEK_HOLD_MS) { this.peekPhase = 'out'; this.peekTimer = 0; }
+                } else {
+                    this.peekProgress = Math.max(0, 1 - this.peekTimer / this.PEEK_OUT_MS);
+                    if (this.peekProgress <= 0) {
+                        this.state        = 'idle';
+                        this.lastPeekTime = Date.now();
+                    }
+                }
+            }
+
+            _startDash() {
+                this.state     = 'dashing';
+                const w = this.canvas.width  || 400;
+                const h = this.canvas.height || 700;
+                this.dashDir   = Math.random() > 0.5 ? 1 : -1;
+                this.dashX     = this.dashDir === 1 ? -(this.SIZE * 2) : w + this.SIZE * 2;
+                this.dashY     = h * 0.2 + Math.random() * h * 0.55;
+                this.dashSpeed = (w + this.SIZE * 4) / 2200;
+                this.dashTime  = 0;
+            }
+
+            _updateDash(dt) {
+                this.dashTime += dt;
+                this.dashX += this.dashDir * this.dashSpeed * dt;
+                const w    = this.canvas.width;
+                const done = this.dashDir === 1
+                    ? this.dashX >  w + this.SIZE * 2
+                    : this.dashX < -(this.SIZE * 2);
+                if (done) {
+                    this.state        = 'idle';
+                    this.lastActivity = Date.now();
+                }
+            }
+
+            _draw() {
+                const ctx = this.ctx;
+                const w   = this.canvas.width;
+                const h   = this.canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                if (this.state === 'idle') return;
+                if (this.state === 'peeking') this._drawPeek(ctx, w, h);
+                else                          this._drawDash(ctx, w, h);
+            }
+
+            // キャラクター描画（将来の画像差し替えはここを置き換える）
+            _drawChar(ctx, x, y) {
+                const s = this.SIZE;
+                const t = this.animTime;
+                ctx.save();
+                ctx.translate(x, y);
+
+                // 影
+                ctx.fillStyle = 'rgba(0,0,0,0.09)';
+                ctx.beginPath();
+                ctx.ellipse(0, s * 0.58, s * 0.42, s * 0.1, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 耳（左右、ゆらゆら）
+                for (const side of [-1, 1]) {
+                    const ew = Math.sin(t * 0.003 + side * 0.9) * 0.1;
+                    ctx.save();
+                    ctx.translate(side * s * 0.22, -s * 0.28);
+                    ctx.rotate(side * (0.22 + ew));
+                    ctx.fillStyle = '#ff91c8';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -s * 0.28, s * 0.12, s * 0.3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#ffd6ec';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -s * 0.28, s * 0.065, s * 0.21, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 胴体
+                ctx.fillStyle = '#ff91c8';
+                ctx.beginPath();
+                ctx.ellipse(0, s * 0.08, s * 0.44, s * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 胴体ハイライト
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.beginPath();
+                ctx.ellipse(-s * 0.1, -s * 0.06, s * 0.17, s * 0.14, -0.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 目（左右・まぬけな感じで瞳がちょっとずれてる）
+                for (const side of [-1, 1]) {
+                    const ex = side * s * 0.16;
+                    const ey = -s * 0.02;
+                    const pw = Math.sin(t * 0.002 + side * 0.6) * s * 0.025;
+                    // 白目
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.ellipse(ex, ey, s * 0.14, s * 0.16, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 瞳
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath();
+                    ctx.arc(ex + pw + side * s * 0.022, ey + s * 0.025, s * 0.065, 0, Math.PI * 2);
+                    ctx.fill();
+                    // ハイライト
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(ex + pw - s * 0.04, ey - s * 0.03, s * 0.027, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 鼻
+                ctx.fillStyle = '#dd6699';
+                ctx.beginPath();
+                ctx.ellipse(0, s * 0.17, s * 0.05, s * 0.032, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // まぬけな口
+                ctx.strokeStyle = '#cc5590';
+                ctx.lineWidth   = s * 0.038;
+                ctx.lineCap     = 'round';
+                ctx.beginPath();
+                ctx.moveTo(-s * 0.11, s * 0.25);
+                ctx.quadraticCurveTo(0, s * 0.37, s * 0.11, s * 0.25);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            _drawPeek(ctx, w, h) {
+                const t = this.animTime;
+                const p = this.peekProgress;
+                const s = this.SIZE;
+
+                // 細かく不気味にうねうね（複数周波数）
+                const wx = Math.sin(t * 0.018) * 2.2 + Math.sin(t * 0.033) * 1.4;
+                const wy = Math.sin(t * 0.024) * 2.8 + Math.sin(t * 0.013) * 1.8;
+                const wr = Math.sin(t * 0.02) * 0.038;
+
+                // 右端からスライドイン（p=0: 画面外, p=1: 顔の左半分が見える）
+                const cx = w + s * 0.5 - s * 0.9 * p + wx;
+                const cy = h * 0.44 + wy;
+
+                ctx.save();
+                ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+                ctx.translate(cx, cy);
+                ctx.rotate(wr);
+                this._drawChar(ctx, 0, 0);
+                ctx.restore();
+            }
+
+            _drawDash(ctx, w, h) {
+                const t = this.dashTime;
+                const s = this.SIZE;
+
+                // スーパーバニーマン風ラグドール（多周波サイン合成・位相ずらし）
+                const wy = Math.sin(t * 0.012) * 38
+                         + Math.sin(t * 0.019 + 1.2) * 24
+                         + Math.sin(t * 0.034 + 2.8) * 14
+                         + Math.sin(t * 0.007 + 0.5) * 20;
+                const wr = (Math.sin(t * 0.015) * 0.28
+                          + Math.sin(t * 0.027 + 1.0) * 0.14) * this.dashDir;
+                const sq = Math.abs(Math.sin(t * 0.022));
+                const sx = this.dashDir * (1 + sq * 0.22);
+                const sy = 1 - sq * 0.12;
+
+                // 残像トレイル（スピード感）
+                for (let i = 2; i >= 1; i--) {
+                    const lag = i * 140;
+                    const lt  = Math.max(0, t - lag);
+                    const lwy = Math.sin(lt * 0.012) * 38
+                              + Math.sin(lt * 0.019 + 1.2) * 24
+                              + Math.sin(lt * 0.034 + 2.8) * 14;
+                    const lx  = this.dashX - this.dashDir * this.dashSpeed * lag;
+                    ctx.save();
+                    ctx.globalAlpha = 0.18 / i;
+                    ctx.translate(lx, this.dashY + lwy);
+                    ctx.scale(this.dashDir, 1);
+                    this._drawChar(ctx, 0, 0);
+                    ctx.restore();
+                }
+
+                // 本体
+                ctx.save();
+                ctx.translate(this.dashX, this.dashY + wy);
+                ctx.rotate(wr);
+                ctx.scale(sx, sy);
+                this._drawChar(ctx, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        let _banicoritanInited = false;
+        function initBanicoritan() {
+            if (_banicoritanInited) return;
+            _banicoritanInited = true;
+            window.__banicoritan = new Banicoritan(document.getElementById('banicori-canvas'));
+        }
 
         function showSaveMock() {
             document.getElementById('save-data-display').value = JSON.stringify(gameState);

@@ -1,0 +1,11 @@
+{
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "allow": [
+      "mcp__vibeline__request_approval",
+      "mcp__vibeline__write_log",
+      "mcp__vibeline__read_inbox",
+      "mcp__vibeline__write_reply"
+    ]
+  }
+}
