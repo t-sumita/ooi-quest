@@ -4,7 +4,7 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.8.0
+バージョン: 1.8.1
 最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
@@ -39,6 +39,10 @@
   改行すること。
 
 【更新履歴】
+v1.8.1 (2026-06-07)
+  - ゲーム画面イースターエッグ「バニコリタン」の
+    カラーをピンク(#ff91c8)からオレンジ(#ff8c2a)に変更。
+    スタート画面バニコリタン2・プレイアブル版は変更なし。
 v1.8.0 (2026-06-07)
   - バニコリタンをアバターとして選択・プレイ可能に。
     右から2番目のアバター枠にアニメーション付きプレビュー
@@ -264,7 +268,7 @@ v1.0.0 (2026-04-18)
     <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
         <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
         <p class="text-sm text-gray-500 mb-1">〜 放課後のプチぼうけん 〜</p>
-        <p class="text-[10px] text-gray-300 mb-6">v1.8.0</p>
+        <p class="text-[10px] text-gray-300 mb-6">v1.8.1</p>
         
         <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
             <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
@@ -1506,12 +1510,12 @@ v1.0.0 (2026-04-18)
                     const a2 = a1 + Math.sin(t * 0.011 + side * 2.1) * 0.58 + side * 0.18;
                     const mx = bx + Math.cos(a1) * s * 0.32, my = by + Math.sin(a1) * s * 0.32;
                     const tx = mx + Math.cos(a2) * s * 0.4,  ty = my + Math.sin(a2) * s * 0.4;
-                    ctx.strokeStyle = '#ff91c8'; ctx.lineWidth = s * 0.22; ctx.lineCap = 'round';
+                    ctx.strokeStyle = '#ff8c2a'; ctx.lineWidth = s * 0.22; ctx.lineCap = 'round';
                     ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(mx, my, tx, ty); ctx.stroke();
                 }
 
                 // 胴体（変形アメーバブロブ）
-                ctx.fillStyle = '#ff91c8';
+                ctx.fillStyle = '#ff8c2a';
                 ctx.beginPath();
                 const N = 8;
                 const pts = Array.from({ length: N }, (_, i) => {
@@ -1543,11 +1547,11 @@ v1.0.0 (2026-04-18)
                 }
 
                 // 鼻
-                ctx.fillStyle = '#dd6699';
+                ctx.fillStyle = '#cc5500';
                 ctx.beginPath(); ctx.ellipse(0, s * 0.15, s * 0.045, s * 0.03, 0, 0, Math.PI * 2); ctx.fill();
 
                 // まぬけな口
-                ctx.strokeStyle = '#cc5590'; ctx.lineWidth = s * 0.036; ctx.lineCap = 'round';
+                ctx.strokeStyle = '#cc5500'; ctx.lineWidth = s * 0.036; ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(-s * 0.1, s * 0.23);
                 ctx.quadraticCurveTo(0, s * 0.34, s * 0.1, s * 0.23);
