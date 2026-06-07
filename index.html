@@ -4,7 +4,7 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.8.1
+バージョン: 1.8.2
 最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
@@ -39,6 +39,10 @@
   改行すること。
 
 【更新履歴】
+v1.8.2 (2026-06-07)
+  - イベント削除: HALLO(プログラミング)、
+    TokyoEKA英会話、トイズアカデミー。
+    対応するspecialGraphicsエントリも同時削除。
 v1.8.1 (2026-06-07)
   - ゲーム画面イースターエッグ「バニコリタン」の
     カラーをピンク(#ff91c8)からオレンジ(#ff8c2a)に変更。
@@ -268,7 +272,7 @@ v1.0.0 (2026-04-18)
     <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
         <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
         <p class="text-sm text-gray-500 mb-1">〜 放課後のプチぼうけん 〜</p>
-        <p class="text-[10px] text-gray-300 mb-6">v1.8.1</p>
+        <p class="text-[10px] text-gray-300 mb-6">v1.8.2</p>
         
         <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
             <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
@@ -431,8 +435,7 @@ v1.0.0 (2026-04-18)
         const tileGraphics = { 1: "🏢", 2: "🌳", 3: "✨", 4: "🛤️", 5: "💧" };
         const specialGraphics = {
             "0,4": "⛩️", "16,2": "🍣", "13,4": "🚉", "18,6": "🏫",
-            "7,18": "🏛️", "4,12": "💻", "13,9": "☕", "7,3": "📚",
-            "7,9": "🗣️", "5,15": "🏫"
+            "7,18": "🏛️", "13,9": "☕", "5,15": "🏫"
         };
 
         // ★選択肢を増やしました
@@ -497,15 +500,6 @@ v1.0.0 (2026-04-18)
                     { text: "おみくじを引く", stats: { happy: 100, money: -50, curiosity: 150 }, resultText: "「大吉出た！今年はいいことありそう♪」" }
                 ], played: false 
             },
-            "4,12": { 
-                id: "programming", illustration: "💻", title: "HALLO (プログラミング)", 
-                text: "ここでゲームの作り方を習えそう。私もクリエイターになれるかも？", 
-                choices: [ 
-                    { text: "体験レッスンを受けてみる", stats: { happy: 150, comm: 100, stamina: -10, curiosity: 400, local: 100 }, resultText: "「プログラミングって意外と面白い！私にもゲーム作れるかも。」" }, 
-                    { text: "外からこっそり見学する", stats: { happy: 50, curiosity: 200, local: 50 }, resultText: "「みんな真剣にパソコン向かってる。すごいなぁ…。」" },
-                    { text: "タイピングに挑戦！", stats: { happy: 100, stamina: -5, curiosity: 250 }, resultText: "「カタカタカタ…！私、結構タイピング早いかも！？」" }
-                ], played: false 
-            },
             "18,6": { 
                 id: "tachiai_es", illustration: "🏫", title: "立会小学校", 
                 text: "小学生たちが元気いっぱい遊んでる。エモい気持ちになった。", 
@@ -513,15 +507,6 @@ v1.0.0 (2026-04-18)
                     { text: "昔を思い出してほっこり", stats: { happy: 200, stamina: 20, curiosity: 50, local: 300 }, resultText: "「あんなに無邪気に遊んでた頃があったなぁ…（遠い目）」" }, 
                     { text: "小学生に手を振り返す", stats: { happy: 150, comm: 200, local: 100 }, resultText: "「小学生たちが笑顔で手を振り返してくれた。なんか嬉しい！」" },
                     { text: "校舎の時計を見る", stats: { happy: 50 }, resultText: "「あっ、もうこんな時間！そろそろ移動しなきゃ。」" }
-                ], played: false 
-            },
-            "7,9": { 
-                id: "english", illustration: "🗣️", title: "TokyoEKA英会話", 
-                text: "Hello! 外国人の先生が挨拶してくれたよ。", 
-                choices: [ 
-                    { text: "元気に Hello! と返す", stats: { happy: 100, comm: 300, curiosity: 150 }, resultText: "「\"Excellent!\"って言われた！私の英語、通じた！」" }, 
-                    { text: "恥ずかしくて会釈だけする", stats: { comm: 50, curiosity: 50 }, resultText: "「やっぱり外国人の先生を前にすると緊張しちゃうな…。」" },
-                    { text: "勇気を出して How are you? と聞く", stats: { happy: 200, comm: 400, curiosity: 200 }, resultText: "「先生が笑顔でたくさん答えてくれた！コミュ力上がったかも！」" }
                 ], played: false 
             },
             "13,9": { 
@@ -532,15 +517,6 @@ v1.0.0 (2026-04-18)
                     { text: "映えるドリンクを頼む", stats: { happy: 250, comm: 100, stamina: 150, curiosity: 200, money: -80 }, resultText: "「これ絶対インスタ映えするやつ！飲むのがもったいないくらい可愛い。」" },
                     { text: "ブラックコーヒーに挑戦", stats: { happy: 100, stamina: 200, curiosity: 100, money: -50 }, resultText: "「に、にがい…。でもちょっと大人になった気分！」" }
                 ], played: false, reusable: true 
-            },
-            "7,3": { 
-                id: "toys_academy", illustration: "📚", title: "トイズアカデミー", 
-                text: "頭が良くなりそうなおもちゃや教材がたくさんある！", 
-                choices: [ 
-                    { text: "知育パズルに挑戦してみる", stats: { happy: 100, stamina: -10, curiosity: 350 }, resultText: "「うーん、難しい！でも解けた時のスッキリ感がたまらない。」" }, 
-                    { text: "面白そうな教材を眺める", stats: { happy: 50, curiosity: 200 }, resultText: "「小さい子向けのおもちゃって、見てるだけで癒やされるなぁ。」" },
-                    { text: "立体パズルを組んでみる", stats: { happy: 150, curiosity: 300 }, resultText: "「すごい！これどうやって組み合わさってるんだろう？」" }
-                ], played: false 
             },
             "16,13": { 
                 id: "tachiai_gawa", illustration: "🌊", title: "立会川周辺", 
