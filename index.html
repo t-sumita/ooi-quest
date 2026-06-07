@@ -4,7 +4,7 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.9.0
+バージョン: 1.10.0
 最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
@@ -39,6 +39,14 @@
   改行すること。
 
 【更新履歴】
+v1.10.0 (2026-06-07)
+  - フェーズ2: スポット間移動モデル実装。
+    スポットをタップ/クリックで隣接スポットへ移動。
+    矢印キーで方向に最も近い隣接スポットへ移動。
+    スワイプ方向で隣接スポットへ移動（モバイル対応）。
+    移動時に体力を距離に応じて消費。
+    隣接スポットを明るい黄色枠でハイライト表示。
+    ホバー時「→ スポット名」ツールチップ表示。
 v1.9.0 (2026-06-07)
   - フェーズ1: DOMグリッドマップをSVGカルトグラム
     マップに置き換え。スポット8箇所をノードで表示。
@@ -276,6 +284,7 @@ v1.0.0 (2026-04-18)
 
         <!-- SVGマップ -->
         <div id="map-viewport" class="flex-grow" style="min-height:0;position:relative">
+            <div id="spot-tooltip" style="display:none;position:absolute;z-index:20;background:rgba(26,26,46,0.95);border:1px solid #f5c518;color:#f5c518;font-size:10px;padding:3px 8px;pointer-events:none;border-radius:2px;font-family:'DotGothic16',sans-serif;"></div>
             <div id="player-center"></div>
             <canvas id="bani-player-canvas"></canvas>
         </div>
@@ -485,9 +494,12 @@ v1.0.0 (2026-04-18)
 
             gameState.player.currentSpot = 'school';
             drawSvgMap();
+            refreshSvgMap();
+            setupMapInteraction();
             updateStatus();
             document.getElementById('log').innerHTML = "";
             logMessage("豊葉の杜学園からスタートしたよ！");
+            logMessage("隣のスポットをタップ(またはクリック)して移動しよう！");
             checkEvent('school');
             initBanicoritan();
         }
@@ -552,25 +564,51 @@ v1.0.0 (2026-04-18)
                 const ev = events[sid];
                 const played = ev && ev.played && !ev.reusable;
                 const strokeCol = played ? '#4a4a8a' : '#f5c518';
+
+                const g = document.createElementNS(ns, 'g');
+                g.id = 'spot-group-' + sid;
+                g.style.cursor = 'pointer';
+
                 const circle = mk('circle', {
                     id: 'spot-circle-' + sid,
                     cx: s.x, cy: s.y, r: s.r,
                     fill: '#0d0d28', stroke: strokeCol, 'stroke-width': '2.5'
                 });
                 if (played) circle.setAttribute('stroke-dasharray', '4 3');
-                svg.appendChild(circle);
+                g.appendChild(circle);
 
-                svg.appendChild(txt('text', {
+                g.appendChild(txt('text', {
                     x: s.x, y: s.y - 3,
                     'text-anchor': 'middle', 'dominant-baseline': 'central',
                     'font-size': Math.max(14, Math.round(s.r * 0.68))
                 }, s.icon));
 
-                svg.appendChild(txt('text', {
+                g.appendChild(txt('text', {
                     x: s.x, y: s.y + s.r + 12,
                     'text-anchor': 'middle', fill: '#e8e8d0',
                     'font-size': '9', 'font-family': 'DotGothic16,sans-serif'
                 }, s.name));
+
+                g.addEventListener('click', () => moveToSpot(sid));
+                g.addEventListener('mouseover', () => {
+                    const cur = spots[gameState.player.currentSpot];
+                    if (!cur.neighbors.includes(sid)) return;
+                    const tt = document.getElementById('spot-tooltip');
+                    tt.textContent = '→ ' + s.name;
+                    tt.style.display = 'block';
+                });
+                g.addEventListener('mousemove', (e) => {
+                    const tt = document.getElementById('spot-tooltip');
+                    if (tt.style.display === 'none') return;
+                    const vpRect = document.getElementById('map-viewport').getBoundingClientRect();
+                    tt.style.left = (e.clientX - vpRect.left + 12) + 'px';
+                    tt.style.top  = (e.clientY - vpRect.top  - 30) + 'px';
+                });
+                g.addEventListener('mouseout', () => {
+                    document.getElementById('spot-tooltip').style.display = 'none';
+                });
+
+                svg.appendChild(g);
             }
 
             // プレイヤーマーカー（点滅リング）
@@ -604,15 +642,29 @@ v1.0.0 (2026-04-18)
         }
 
         function refreshSvgMap() {
+            const cur = spots[gameState.player.currentSpot];
             for (const [sid] of Object.entries(spots)) {
                 const el = document.getElementById('spot-circle-' + sid);
                 if (!el) continue;
                 const ev = events[sid];
-                if (ev && ev.played && !ev.reusable) {
+                const played    = ev && ev.played && !ev.reusable;
+                const isNeighbor = cur.neighbors.includes(sid);
+                const isCurrent  = sid === gameState.player.currentSpot;
+                if (isCurrent) {
+                    el.setAttribute('stroke', '#f5c518');
+                    el.setAttribute('stroke-width', '2.5');
+                    el.removeAttribute('stroke-dasharray');
+                } else if (isNeighbor) {
+                    el.setAttribute('stroke', '#ffe066');
+                    el.setAttribute('stroke-width', '3.5');
+                    el.removeAttribute('stroke-dasharray');
+                } else if (played) {
                     el.setAttribute('stroke', '#4a4a8a');
+                    el.setAttribute('stroke-width', '2');
                     el.setAttribute('stroke-dasharray', '4 3');
                 } else {
-                    el.setAttribute('stroke', '#f5c518');
+                    el.setAttribute('stroke', '#888860');
+                    el.setAttribute('stroke-width', '2');
                     el.removeAttribute('stroke-dasharray');
                 }
             }
@@ -674,8 +726,39 @@ v1.0.0 (2026-04-18)
             logEl.scrollTop = logEl.scrollHeight;
         }
 
-        // フェーズ2で moveToSpot に置き換え
-        function movePlayer(dx, dy) {}
+        function moveToSpot(targetId) {
+            const cur = spots[gameState.player.currentSpot];
+            if (!cur.neighbors.includes(targetId)) return;
+            if (!document.getElementById('event-modal').classList.contains('hidden')) return;
+
+            const t = spots[targetId];
+            const ddx = t.x - cur.x, ddy = t.y - cur.y;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+            const cost = Math.max(5, Math.round(dist / 25));
+
+            gameState.player.currentSpot = targetId;
+            gameState.stats.stamina = Math.max(-999, gameState.stats.stamina - cost);
+            updateStatus({ stamina: -cost });
+            logMessage(t.name + 'へ移動。');
+
+            if (window.__baniPlayer) window.__baniPlayer.onMove(ddx, ddy);
+
+            refreshSvgMap();
+            checkEvent(targetId);
+        }
+
+        function getNearestNeighborInDirection(dx, dy) {
+            const cur = spots[gameState.player.currentSpot];
+            let best = null, bestScore = -Infinity;
+            for (const nId of cur.neighbors) {
+                const n = spots[nId];
+                const ndx = n.x - cur.x, ndy = n.y - cur.y;
+                const score = (dx * ndx + dy * ndy) /
+                    (Math.sqrt(dx * dx + dy * dy) * Math.sqrt(ndx * ndx + ndy * ndy));
+                if (score > bestScore) { bestScore = score; best = nId; }
+            }
+            return bestScore > 0.3 ? best : null;
+        }
 
         function checkEvent(spotId) {
             const ev = events[spotId];
@@ -756,6 +839,38 @@ v1.0.0 (2026-04-18)
         let isSwiping = false;
         window.addEventListener('mouseup',  () => { isSwiping = false; });
         window.addEventListener('touchend', () => { isSwiping = false; });
+
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('game-screen').classList.contains('hidden')) return;
+            if (!document.getElementById('event-modal').classList.contains('hidden')) return;
+            const dirMap = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+            const dir = dirMap[e.key];
+            if (!dir) return;
+            e.preventDefault();
+            const nId = getNearestNeighborInDirection(dir[0], dir[1]);
+            if (nId) moveToSpot(nId);
+        });
+
+        let _mapInteractionInited = false;
+        function setupMapInteraction() {
+            if (_mapInteractionInited) return;
+            _mapInteractionInited = true;
+            const vp = document.getElementById('map-viewport');
+            let _swipeStart = null;
+            vp.addEventListener('touchstart', (e) => {
+                _swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }, { passive: true });
+            vp.addEventListener('touchend', (e) => {
+                if (!_swipeStart) return;
+                const dx = e.changedTouches[0].clientX - _swipeStart.x;
+                const dy = e.changedTouches[0].clientY - _swipeStart.y;
+                _swipeStart = null;
+                if (Math.sqrt(dx * dx + dy * dy) < 25) return;
+                if (!document.getElementById('event-modal').classList.contains('hidden')) return;
+                const nId = getNearestNeighborInDirection(dx, dy);
+                if (nId) moveToSpot(nId);
+            }, { passive: true });
+        }
 
 
         // ========================================================
