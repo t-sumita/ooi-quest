@@ -4,7 +4,7 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.10.0
+バージョン: 1.11.0
 最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
@@ -39,6 +39,12 @@
   改行すること。
 
 【更新履歴】
+v1.11.0 (2026-06-07)
+  - フェーズ3仕上げ。
+    3-1 道中ランダム遭遇イベント(8種, 28%確率)追加。
+    3-2 到着スポットのバウンスアニメーション追加。
+        移動時カメラズームイン→アウト演出追加。
+    3-3 初回起動チュートリアルオーバーレイ追加。
 v1.10.0 (2026-06-07)
   - フェーズ2: スポット間移動モデル実装。
     スポットをタップ/クリックで隣接スポットへ移動。
@@ -273,6 +279,18 @@ v1.0.0 (2026-04-18)
     </div>
 
     <div id="game-screen" class="hidden w-full max-w-md h-full flex flex-col relative" style="background:#1a1a2e">
+        <!-- チュートリアルオーバーレイ -->
+        <div id="tutorial-overlay" style="display:none;position:absolute;inset:0;z-index:40;align-items:center;justify-content:center;background:rgba(26,26,46,0.75);transition:opacity 0.4s;opacity:0">
+            <div class="dq-panel" style="text-align:center;padding:18px 24px;max-width:230px">
+                <div style="font-size:28px;margin-bottom:8px">👆</div>
+                <div style="color:#f5c518;font-size:13px;margin-bottom:8px">移動のしかた</div>
+                <div style="color:#e8e8d0;font-size:11px;line-height:1.9">
+                    隣のスポットをタップして移動！<br>
+                    スワイプや矢印キーでも動けるよ
+                </div>
+                <div style="color:#888860;font-size:9px;margin-top:12px">タップで閉じる</div>
+            </div>
+        </div>
         <!-- ヘッダー -->
         <div class="dq-panel flex-none z-10 flex justify-between items-center" style="padding:8px 12px;border-left:none;border-right:none;border-top:none">
             <div>
@@ -499,9 +517,9 @@ v1.0.0 (2026-04-18)
             updateStatus();
             document.getElementById('log').innerHTML = "";
             logMessage("豊葉の杜学園からスタートしたよ！");
-            logMessage("隣のスポットをタップ(またはクリック)して移動しよう！");
             checkEvent('school');
             initBanicoritan();
+            if (!_tutorialShown) { _tutorialShown = true; setTimeout(showTutorial, 1000); }
         }
 
         function drawSvgMap() {
@@ -744,6 +762,9 @@ v1.0.0 (2026-04-18)
             if (window.__baniPlayer) window.__baniPlayer.onMove(ddx, ddy);
 
             refreshSvgMap();
+            bounceSpot(targetId);
+            animateCameraToSpot(targetId);
+            maybeEncounter();
             checkEvent(targetId);
         }
 
@@ -758,6 +779,85 @@ v1.0.0 (2026-04-18)
                 if (score > bestScore) { bestScore = score; best = nId; }
             }
             return bestScore > 0.3 ? best : null;
+        }
+
+        // 3-2: 到着スポットのバウンスアニメーション
+        function bounceSpot(spotId) {
+            const el = document.getElementById('spot-circle-' + spotId);
+            if (!el) return;
+            const origR = spots[spotId].r;
+            const t0 = performance.now();
+            const dur = 420;
+            const tick = (now) => {
+                const t = Math.min(1, (now - t0) / dur);
+                const r = origR * (1 + 0.32 * Math.sin(t * Math.PI) * (1 - t * 0.4));
+                el.setAttribute('r', r.toFixed(2));
+                if (t < 1) requestAnimationFrame(tick);
+                else el.setAttribute('r', origR);
+            };
+            requestAnimationFrame(tick);
+        }
+
+        // 3-2: カメラズームイン → ズームアウト
+        function animateCameraToSpot(spotId) {
+            const svg = document.getElementById('svg-map');
+            if (!svg) return;
+            const s = spots[spotId];
+            const vp = document.getElementById('map-viewport');
+            const vpW = vp.offsetWidth || 400;
+            const vpH = vp.offsetHeight || 350;
+            const scaleR = Math.min(vpW / 490, vpH / 430);
+            const svgW = 490 * scaleR, svgH = 430 * scaleR;
+            const ox = (vpW - svgW) / 2 + (s.x - 80) / 490 * svgW;
+            const oy = (vpH - svgH) / 2 + (s.y - 70) / 430 * svgH;
+            svg.style.transformOrigin = `${ox.toFixed(1)}px ${oy.toFixed(1)}px`;
+            svg.style.transition = 'transform 0.18s ease-out';
+            svg.style.transform = 'scale(1.07)';
+            clearTimeout(window._camTimer);
+            window._camTimer = setTimeout(() => {
+                svg.style.transition = 'transform 0.42s ease-in-out';
+                svg.style.transform = 'scale(1)';
+            }, 220);
+        }
+
+        // 3-1: 道中ランダム遭遇イベント
+        const encounterEvents = [
+            { text: "通行人にぶつかってしまった…。",     stats: { comm: -20, happy: -15 }, icon: "😵" },
+            { text: "道に迷ってうろうろしてしまった。",   stats: { stamina: -20, curiosity: 50 }, icon: "🗺️" },
+            { text: "地元のおばさんに話しかけられた！",   stats: { comm: 80, local: 50 }, icon: "👵" },
+            { text: "急に自転車が飛び出してきた！",       stats: { stamina: -15, happy: -20 }, icon: "🚲" },
+            { text: "路地でかわいいネコを発見！",         stats: { happy: 100, curiosity: 30 }, icon: "🐱" },
+            { text: "近所の友達にばったり会った！",       stats: { comm: 100, happy: 80 }, icon: "👋" },
+            { text: "地面に百円玉が落ちていた！",         stats: { money: 100, happy: 50 }, icon: "🪙" },
+            { text: "変な看板を見つけて笑ってしまった。", stats: { happy: 60, curiosity: 40 }, icon: "😂" },
+        ];
+
+        function maybeEncounter() {
+            if (Math.random() > 0.28) return;
+            const enc = encounterEvents[Math.floor(Math.random() * encounterEvents.length)];
+            clearAllDeltas();
+            for (const k in enc.stats) {
+                if (gameState.stats[k] !== undefined) gameState.stats[k] += enc.stats[k];
+            }
+            updateStatus(enc.stats);
+            logMessage(enc.icon + ' ' + enc.text, true);
+        }
+
+        // 3-3: チュートリアル（初回のみ）
+        let _tutorialShown = false;
+        function showTutorial() {
+            const ov = document.getElementById('tutorial-overlay');
+            if (!ov) return;
+            ov.style.display = 'flex';
+            requestAnimationFrame(() => { ov.style.opacity = '1'; });
+            const close = () => {
+                ov.style.opacity = '0';
+                setTimeout(() => { ov.style.display = 'none'; }, 420);
+                ov.removeEventListener('click', close);
+                clearTimeout(_tutTimer);
+            };
+            ov.addEventListener('click', close);
+            const _tutTimer = setTimeout(close, 3200);
         }
 
         function checkEvent(spotId) {
