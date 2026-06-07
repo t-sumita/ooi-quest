@@ -4,7 +4,7 @@
 <!--
 =========================================================
 大井町エモ・クエスト (Oimachi Quest)
-バージョン: 1.7.0
+バージョン: 1.8.0
 最終更新日時: 2026年6月7日 (JST)
 
 【フェーズ別実装・アイデア情報】
@@ -39,6 +39,13 @@
   改行すること。
 
 【更新履歴】
+v1.8.0 (2026-06-07)
+  - バニコリタンをアバターとして選択・プレイ可能に。
+    右から2番目のアバター枠にアニメーション付きプレビュー
+    を表示。ゲーム中はCanvas描画のバニコリタンが中央に
+    固定表示され、移動ごとにウネウネ動く。
+    動きスタイルは6歩ごとに自動切替（ころころ/くねくね
+    /ぴょんぴょん/ぐるぐる）。
 v1.7.0 (2026-06-07)
   - バニコリタン/バニコリタン2 を軟体動物風挙動に刷新。
     胴体: 8点ベジェアメーバブロブ（各点が独立に波打つ）。
@@ -166,10 +173,20 @@ v1.0.0 (2026-04-18)
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 20px; 
+            font-size: 20px;
             z-index: 20;
-            pointer-events: none; 
-            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); 
+            pointer-events: none;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+        }
+
+        #bani-player-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 25;
+            display: none;
         }
 
         #log::-webkit-scrollbar {
@@ -247,7 +264,7 @@ v1.0.0 (2026-04-18)
     <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
         <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
         <p class="text-sm text-gray-500 mb-1">〜 放課後のプチぼうけん 〜</p>
-        <p class="text-[10px] text-gray-300 mb-6">v1.7.0</p>
+        <p class="text-[10px] text-gray-300 mb-6">v1.8.0</p>
         
         <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
             <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
@@ -282,8 +299,10 @@ v1.0.0 (2026-04-18)
                     <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👩‍🦰</span>
                 </label>
                 <label class="cursor-pointer flex flex-col items-center">
-                    <input type="radio" name="avatar" value="👱‍♂️" class="hidden peer">
-                    <span class="text-3xl peer-checked:bg-pink-200 p-1 rounded-full transition">👱‍♂️</span>
+                    <input type="radio" name="avatar" value="__bani__" class="hidden peer">
+                    <span class="peer-checked:bg-pink-200 p-1 rounded-full transition inline-block">
+                        <canvas id="bani-preview-canvas" width="36" height="36" style="display:block;"></canvas>
+                    </span>
                 </label>
                 <label class="cursor-pointer flex flex-col items-center">
                     <input type="radio" name="avatar" value="🐈" class="hidden peer">
@@ -338,6 +357,7 @@ v1.0.0 (2026-04-18)
                 <div id="map"></div>
             </div>
             <div id="player-center"></div>
+            <canvas id="bani-player-canvas"></canvas>
             <div class="absolute bottom-2 left-0 w-full text-center text-[10px] text-gray-400 font-bold pointer-events-none opacity-70">
                 画面をなぞり続けて連続移動！
             </div>
@@ -548,7 +568,18 @@ v1.0.0 (2026-04-18)
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
             document.getElementById('ui-name').innerText = gameState.player.name;
-            document.getElementById('player-center').innerText = gameState.player.avatar;
+
+            const baniCanvas = document.getElementById('bani-player-canvas');
+            if (gameState.player.avatar === '__bani__') {
+                document.getElementById('player-center').style.display = 'none';
+                baniCanvas.style.display = 'block';
+                window.__baniPlayer = new BanicoritanPlayer(baniCanvas);
+            } else {
+                document.getElementById('player-center').style.display = '';
+                document.getElementById('player-center').innerText = gameState.player.avatar;
+                baniCanvas.style.display = 'none';
+                window.__baniPlayer = null;
+            }
 
             initMap();
             updateCameraPosition();
@@ -641,11 +672,15 @@ v1.0.0 (2026-04-18)
             document.getElementById('ui-class').innerText = className;
         }
 
+        function getAvatarDisplay() {
+            return gameState.player.avatar === '__bani__' ? '🐰' : gameState.player.avatar;
+        }
+
         function logMessage(msg, isPlayer = false) {
             const logEl = document.getElementById('log');
             const p = document.createElement('div');
             if (isPlayer) {
-                p.innerText = `${gameState.player.avatar} ${msg}`;
+                p.innerText = `${getAvatarDisplay()} ${msg}`;
                 p.className = "mb-3 mt-1 text-pink-700 font-bold bg-pink-100 bg-opacity-50 p-2 rounded-lg border border-pink-200";
             } else {
                 p.innerText = `> ${msg}`;
@@ -686,6 +721,7 @@ v1.0.0 (2026-04-18)
             updateCameraPosition();
             updateStatus(deltas);
             checkEvent(newX, newY);
+            if (window.__baniPlayer) window.__baniPlayer.onMove(dx, dy);
         }
 
         function checkEvent(x, y) {
@@ -841,6 +877,158 @@ v1.0.0 (2026-04-18)
         });
 
         window.addEventListener('resize', () => { if(document.getElementById('game-screen').classList.contains('hidden') === false) updateCameraPosition(); });
+
+        // ========================================================
+        // drawBaniChar — バニコリタン共通描画関数
+        // BanicoritanPlayer とアバタープレビューで共用。
+        // (ctx, cx, cy, s, t): 中心(cx,cy)にサイズsで描画。
+        // ========================================================
+        function drawBaniChar(ctx, cx, cy, s, t) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            // 耳（2セグメント垂れ耳ベジェ）
+            for (const side of [-1, 1]) {
+                const bx = side * s * 0.24, by = -s * 0.3;
+                const a1 = -Math.PI / 2 + side * 0.26 + Math.sin(t * 0.007 + side * 1.3) * 0.42;
+                const a2 = a1 + Math.sin(t * 0.011 + side * 2.1) * 0.58 + side * 0.18;
+                const mx = bx + Math.cos(a1) * s * 0.32, my = by + Math.sin(a1) * s * 0.32;
+                const tx = mx + Math.cos(a2) * s * 0.4,  ty = my + Math.sin(a2) * s * 0.4;
+                ctx.strokeStyle = '#ff91c8'; ctx.lineWidth = s * 0.22; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(mx, my, tx, ty); ctx.stroke();
+            }
+            // 胴体（変形アメーバブロブ）
+            ctx.fillStyle = '#ff91c8'; ctx.beginPath();
+            const N = 8;
+            const pts = Array.from({ length: N }, (_, i) => {
+                const a = (i / N) * Math.PI * 2;
+                const r = s * (0.44 + Math.sin(t * 0.013 + a * 2.5) * 0.07
+                                    + Math.sin(t * 0.019 + a * 1.7 + 1.3) * 0.05);
+                return { x: Math.cos(a) * r * 0.88, y: s * 0.08 + Math.sin(a) * r };
+            });
+            for (let i = 0; i < N; i++) {
+                const p1 = pts[i], p2 = pts[(i + 1) % N];
+                const cpx = (p1.x + p2.x) / 2, cpy = (p1.y + p2.y) / 2;
+                i === 0
+                    ? ctx.moveTo((pts[N - 1].x + p1.x) / 2, (pts[N - 1].y + p1.y) / 2)
+                    : ctx.quadraticCurveTo(p1.x, p1.y, cpx, cpy);
+                if (i === 0) ctx.quadraticCurveTo(p1.x, p1.y, cpx, cpy);
+            }
+            ctx.closePath(); ctx.fill();
+            // 目
+            for (const side of [-1, 1]) {
+                const ex = side * s * 0.15, ey = -s * 0.02;
+                const pw = Math.sin(t * 0.002 + side * 0.6) * s * 0.022;
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.ellipse(ex, ey, s * 0.13, s * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(ex + pw + side * s * 0.02, ey + s * 0.02, s * 0.062, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(ex + pw - s * 0.036, ey - s * 0.025, s * 0.024, 0, Math.PI * 2); ctx.fill();
+            }
+            // 鼻
+            ctx.fillStyle = '#dd6699'; ctx.beginPath(); ctx.ellipse(0, s * 0.15, s * 0.045, s * 0.03, 0, 0, Math.PI * 2); ctx.fill();
+            // 口
+            ctx.strokeStyle = '#cc5590'; ctx.lineWidth = s * 0.036; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(-s * 0.1, s * 0.23); ctx.quadraticCurveTo(0, s * 0.34, s * 0.1, s * 0.23); ctx.stroke();
+            ctx.restore();
+        }
+
+        // ========================================================
+        // BanicoritanPlayer — プレイアブル・バニコリタン
+        // map-viewport内の全面canvasに中央固定で描画する。
+        // 移動6歩ごとにスタイルを切り替え。
+        // Style 0=ころころ 1=くねくね 2=ぴょんぴょん 3=ぐるぐる
+        // ========================================================
+        class BanicoritanPlayer {
+            constructor(canvas) {
+                this.canvas    = canvas;
+                this.ctx       = canvas.getContext('2d');
+                this.SIZE      = 34;
+                this.animTime  = 0;
+                this.stepCount = 0;
+                this.style     = 0;
+                this.rollAngle = 0;
+                this.moveEase  = 0; // 1→0 in ~300ms after each move
+
+                let last = performance.now();
+                const tick = (now) => {
+                    const dt = Math.min(now - last, 100);
+                    last = now;
+                    const ow = this.canvas.offsetWidth, oh = this.canvas.offsetHeight;
+                    if (this.canvas.width !== ow || this.canvas.height !== oh) {
+                        this.canvas.width = ow; this.canvas.height = oh;
+                    }
+                    this.animTime += dt;
+                    if (this.moveEase > 0) this.moveEase = Math.max(0, this.moveEase - dt / 300);
+                    this._draw();
+                    requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            }
+
+            onMove(dx, dy) {
+                this.moveEase  = 1;
+                this.stepCount++;
+                const spin = dx !== 0 ? dx : dy;
+                if (this.style === 0 || this.style === 3) this.rollAngle += spin * 0.9;
+                if (this.stepCount % 6 === 0) this.style = (this.style + 1) % 4;
+            }
+
+            _draw() {
+                const ctx = this.ctx;
+                const w = this.canvas.width, h = this.canvas.height;
+                if (!w || !h) return;
+                ctx.clearRect(0, 0, w, h);
+                const s = this.SIZE, t = this.animTime, e = this.moveEase;
+
+                ctx.save();
+                ctx.translate(w / 2, h / 2);
+
+                if (this.style === 0) {
+                    // ころころ: 移動方向に転がる
+                    ctx.rotate(this.rollAngle + Math.sin(t * 0.004) * 0.08);
+                } else if (this.style === 1) {
+                    // くねくね: 横に蛇行シアー
+                    const shear = Math.sin(t * 0.012) * (0.3 + e * 0.25);
+                    ctx.transform(1, shear, 0, 1, 0, 0);
+                } else if (this.style === 2) {
+                    // ぴょんぴょん: スカッシュ＆ストレッチ＋上下バウンス
+                    const phase = Math.abs(Math.sin(t * 0.016));
+                    const bounce = -phase * s * (0.35 + e * 0.35);
+                    ctx.translate(0, bounce);
+                    ctx.scale(1 + phase * 0.18, 1 - phase * 0.12);
+                } else {
+                    // ぐるぐる: 高速回転
+                    ctx.rotate(this.rollAngle + t * 0.009);
+                }
+
+                drawBaniChar(ctx, 0, 0, s, t);
+                ctx.restore();
+
+                // 現在スタイル名を足元にふわっと表示
+                const labels = ['ころころ', 'くねくね', 'ぴょんぴょん', 'ぐるぐる'];
+                const alpha  = 0.35 + e * 0.45;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle   = '#ff91c8';
+                ctx.font        = 'bold 9px sans-serif';
+                ctx.textAlign   = 'center';
+                ctx.fillText(labels[this.style], w / 2, h / 2 + s * 1.15);
+                ctx.restore();
+            }
+        }
+
+        // アバタープレビュー用アニメーション
+        function initBaniAvatarPreview() {
+            const canvas = document.getElementById('bani-preview-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let t = 0;
+            const tick = () => {
+                t += 16;
+                ctx.clearRect(0, 0, 36, 36);
+                drawBaniChar(ctx, 18, 20, 14, t);
+                requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        }
 
         // ========================================================
         // バニコリタン2（オープニング画面イースターエッグ）
@@ -1143,6 +1331,7 @@ v1.0.0 (2026-04-18)
         window.addEventListener('DOMContentLoaded', () => {
             const c2 = document.getElementById('banicori2-canvas');
             if (c2) window.__banicoritan2 = new Banikolitan2(c2);
+            initBaniAvatarPreview();
         });
 
         // ========================================================
