@@ -39,6 +39,11 @@
   改行すること。
 
 【更新履歴】
+v1.12.0 (2026-06-28)
+  - footerを統一フォーマットに更新。
+    チップ/Sponsors/ご意見・ご要望リンク追加。
+    バージョン表記をJS動的埋め込みに変更。
+    言語切替(ja/en)対応。
 v1.11.0 (2026-06-07)
   - フェーズ3仕上げ。
     3-1 道中ランダム遭遇イベント(8種, 28%確率)追加。
@@ -226,7 +231,7 @@ v1.0.0 (2026-04-18)
     <div id="start-screen" class="w-full max-w-md h-full overflow-y-auto p-6 bg-white rounded-3xl shadow-xl text-center relative z-20">
         <h1 class="text-3xl font-bold text-pink-500 mb-2">大井町エモ・クエスト</h1>
         <p class="text-sm text-gray-500 mb-1">〜 放課後のプチぼうけん 〜</p>
-        <p class="text-[10px] text-gray-300 mb-6">v1.11.0</p>
+        <p id="version-display" class="text-[10px] text-gray-300 mb-6"></p>
         
         <div class="mb-6 text-left text-xs bg-pink-50 p-4 rounded-2xl border border-pink-100">
             <p class="font-bold text-pink-600 mb-2 underline">🌟 ぼうけんのヒント 🌟</p>
@@ -276,6 +281,18 @@ v1.0.0 (2026-04-18)
         <button onclick="startGame()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-xl shadow-md transition transform hover:scale-105 mb-4">
             冒険に出発する！
         </button>
+
+        <footer class="mt-2 pb-4 text-center space-y-2">
+            <div class="flex justify-center gap-2">
+                <a id="link-tip" href="https://ko-fi.com/subutomo" target="_blank" rel="noopener"
+                   class="px-3 py-1 text-[11px] bg-yellow-100 text-yellow-700 rounded-full hover:bg-yellow-200 transition">チップ</a>
+                <a href="https://github.com/sponsors/t-sumita" target="_blank" rel="noopener"
+                   class="px-3 py-1 text-[11px] bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition">Sponsors</a>
+                <a id="link-feedback" href="https://docs.google.com/forms/d/e/1FAIpQLSe8-WYLGkSj7hkO0aQH9Cy6rNDd4a12sSLfPtlnxTTJUEJl6w/viewform" target="_blank" rel="noopener"
+                   class="px-3 py-1 text-[11px] bg-pink-100 text-pink-600 rounded-full hover:bg-pink-200 transition">ご意見・ご要望</a>
+            </div>
+            <p class="text-[10px] text-gray-300">&copy; 2026 <a href="https://www.subutomo.dev/" target="_blank" rel="noopener" class="underline hover:text-gray-400">Subutomo Dev.</a> (v1.0.5)</p>
+        </footer>
     </div>
 
     <div id="game-screen" class="hidden w-full max-w-md h-full flex flex-col relative" style="background:#1a1a2e">
@@ -354,6 +371,21 @@ v1.0.0 (2026-04-18)
     </div>
 
     <script>
+        const APP_VERSION = '1.12.0';
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const vd = document.getElementById('version-display');
+            if (vd) vd.textContent = 'ver. ' + APP_VERSION;
+
+            const lang = document.documentElement.lang || 'ja';
+            if (lang !== 'ja') {
+                const tip = document.getElementById('link-tip');
+                if (tip) tip.textContent = 'Tip';
+                const fb = document.getElementById('link-feedback');
+                if (fb) fb.textContent = 'Feedback';
+            }
+        });
+
         const spots = {
             "school": {
                 id: "school", name: "豊葉の杜学園",
