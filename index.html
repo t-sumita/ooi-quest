@@ -39,6 +39,14 @@
   改行すること。
 
 【更新履歴】
+v1.12.2 (2026-06-29)
+  - 版管理一本化。
+    CLAUDE.mdの版ルールをAPP_VERSION基準に修正。
+    package.jsonは存在しない旨を明記。
+    v1.12.1のchangelog欠落エントリを補完。
+v1.12.1 (2026-06-29)
+  - footer版表示を自サイト版(v1.0.5)と分離し
+    ゲーム版は(vX.Y.Z)形式でJS注入に統一。
 v1.12.0 (2026-06-28)
   - footerを統一フォーマットに更新。
     チップ/Sponsors/ご意見・ご要望リンク追加。
@@ -371,7 +379,7 @@ v1.0.0 (2026-04-18)
     </div>
 
     <script>
-        const APP_VERSION = '1.12.1';
+        const APP_VERSION = '1.12.2';
 
         document.addEventListener('DOMContentLoaded', function () {
             const vd = document.getElementById('version-display');
